@@ -1,45 +1,43 @@
+const { REST, Routes } = require('discord.js');
+const { commands } = require('./commands.js');
 require('dotenv').config();
-const { REST, Routes, SlashCommandBuilder, ChannelType } = require('discord.js');
-const { commands } = require('./commands');
 
-function buildOption(builder, opt) {
-  const setup = (o) => o.setName(opt.name).setDescription((opt.description || opt.name).slice(0, 100)).setRequired(!!opt.required);
-  switch (opt.type) {
-    case 'user': return builder.addUserOption(setup);
-    case 'role': return builder.addRoleOption(setup);
-    case 'channel': return builder.addChannelOption(setup);
-    case 'voice_channel': return builder.addChannelOption((o) => setup(o).addChannelTypes(ChannelType.GuildVoice));
-    case 'integer': return builder.addIntegerOption(setup);
-    default: return builder.addStringOption(setup);
+const token = process.env.DISCORD_TOKEN || process.env.TOKEN;
+const clientId = process.env.CLIENT_ID;
+const guildId = process.env.GUILD_ID;
+
+if (!token || !clientId) {
+  console.error('❌ Token or Client ID missing in .env');
+  process.exit(1);
+}
+
+const rest = new REST({ version: '10' }).setToken(token);
+
+(async () => {
+  try {
+    console.log('🔄 Registering Slash Commands with Discord...');
+
+    const commandsData = commands.map(cmd => ({
+      name: cmd.name,
+      description: cmd.description,
+      options: cmd.options || [],
+      default_member_permissions: cmd.defaultMemberPermissions ? cmd.defaultMemberPermissions.toString() : null
+    }));
+
+    if (guildId) {
+      await rest.put(
+        Routes.applicationGuildCommands(clientId, guildId),
+        { body: commandsData }
+      );
+      console.log('✅ Commands successfully registered for Guild:', guildId);
+    } else {
+      await rest.put(
+        Routes.applicationCommands(clientId),
+        { body: commandsData }
+      );
+      console.log('✅ Global commands successfully registered!');
+    }
+  } catch (error) {
+    console.error('❌ Error registering commands:', error);
   }
-}
-
-function buildCommandBody() {
-  return commands.map((cmd) => {
-    const builder = new SlashCommandBuilder().setName(cmd.name).setDescription(cmd.description.slice(0, 100));
-    for (const opt of cmd.options || []) buildOption(builder, opt);
-    return builder.toJSON();
-  });
-}
-
-async function deployCommands() {
-  const body = buildCommandBody();
-  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-  const clientId = process.env.CLIENT_ID;
-  const guildId = process.env.GUILD_ID;
-  if (!clientId) throw new Error('CLIENT_ID is not set');
-
-  if (guildId) {
-    await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body });
-    console.log(`✅ Registered ${body.length} slash commands on guild ${guildId} (instant).`);
-  } else {
-    await rest.put(Routes.applicationCommands(clientId), { body });
-    console.log(`✅ Registered ${body.length} slash commands globally (may take a few minutes to appear).`);
-  }
-}
-
-if (require.main === module) {
-  deployCommands().catch((err) => { console.error('Deploy error:', err); process.exit(1); });
-}
-
-module.exports = { deployCommands };
+})();
