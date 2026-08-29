@@ -98,7 +98,7 @@ const commands = [
       try {
         let displayName = userId;
         try {
-          const fetchedUser = await ctx.client.users.fetch(userId);
+          const fetchedUser = await ctx.client.users.fetch(userId, { force: true });
           if (fetchedUser) displayName = fetchedUser.username;
         } catch {}
 
@@ -139,9 +139,16 @@ const commands = [
 
       try {
         let displayName = userId;
+
+        // البحث في قائمة الباندات لمعرفة الاسم قبل إلغاء الحظر
         try {
-          const user = await ctx.client.users.fetch(userId);
-          if (user) displayName = user.username;
+          const banInfo = await ctx.guild.bans.fetch(userId).catch(() => null);
+          if (banInfo && banInfo.user) {
+            displayName = banInfo.user.username;
+          } else {
+            const fetchedUser = await ctx.client.users.fetch(userId, { force: true });
+            if (fetchedUser) displayName = fetchedUser.username;
+          }
         } catch {}
 
         await ctx.guild.bans.remove(userId, 'Unbanned via command');
@@ -163,7 +170,7 @@ const commands = [
       const member = await getTargetMember(ctx, 'user');
       const reason = ctx.getString('reason') || 'No reason provided';
       if (!member) return ctx.reply('❌ | Member not found.');
-      if (!member.kickable) return ctx.reply(`❌ | You can't kick ${member.user.tag}.`);
+      if (!member.kickable) return ctx.reply(`❌ | You can't kick ${member.user.username}.`);
       try {
         await member.kick(reason);
         return ctx.reply(`✅ | **${member.user.username}** has been kicked!`);
