@@ -155,7 +155,7 @@ const commands = [
       }
 
       if (!channel || channel.type !== ChannelType.GuildVoice) {
-        return ctx.reply('❌ | You must be in a voice channel or specify a channel.');
+        return ctx.reply('❌ | You must specify a valid voice channel.');
       }
 
       await member.voice.setChannel(channel);
