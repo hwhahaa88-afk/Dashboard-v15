@@ -63,37 +63,46 @@ function scheduleTempUnban(guild, userId, ms) {
 
 const commands = [
   {
-    name: 'ban', description: 'Ban a member from the server | حظر عضو من السيرفر', permission: PermissionFlagsBits.BanMembers,
+    name: 'ban', description: 'Ban a user from the server (inside or outside)', permission: PermissionFlagsBits.BanMembers,
     options: [
-      { name: 'user', type: 'user', required: true, description: 'The member to ban' },
+      { name: 'user', type: 'user', required: true, description: 'The user to ban (ID or mention)' },
       { name: 'reason', type: 'string', required: false, consumeRest: true, description: 'Reason for the ban' },
       { name: 'bulk', type: 'integer', required: false, description: 'Delete messages from the last X days (0-7)' },
       { name: 'time', type: 'string', required: false, description: 'Temporary ban duration' },
     ],
     execute: async (ctx) => {
-      const member = await getTargetMember(ctx, 'user');
+      let targetUser = null;
+      if (ctx.isSlash) {
+        targetUser = ctx.raw.options.getUser('user');
+      } else if (ctx.args[0]) {
+        const id = ctx.args[0].replace(/[<@!>]/g, '');
+        targetUser = await ctx.client.users.fetch(id).catch(() => null);
+      }
+
+      if (!targetUser) return ctx.reply('❌ | User not found.');
+
       const reason = ctx.getString('reason') || 'No reason provided';
       let bulk = ctx.getInteger('bulk') || 0;
       const time = ctx.getString('time');
-      if (!member) return ctx.reply('❌ | Member not found.');
-      if (!member.bannable) return ctx.reply(`❌ | You can't ban ${member.user.tag}.`);
+
       if (bulk < 0) bulk = 0;
       if (bulk > 7) bulk = 7;
       const ms = time ? parseDuration(time) : null;
       if (time && (!ms || ms <= 0)) return ctx.reply('❌ | Invalid duration. Example: 1d, 12h, 30m');
+
       try {
-        await member.ban({ reason, deleteMessageSeconds: bulk * 86400 });
-        if (ms) scheduleTempUnban(ctx.guild, member.id, ms);
-        let out = `✈️ | **${member.user.tag}** has been banned!`;
+        await ctx.guild.bans.create(targetUser.id, { reason, deleteMessageSeconds: bulk * 86400 });
+        if (ms) scheduleTempUnban(ctx.guild, targetUser.id, ms);
+        let out = `✈️ | **${targetUser.username}** has been banned from the server!`;
         if (ms) out += ` (Duration: ${time})`;
         return ctx.reply(out);
       } catch (e) {
-        return ctx.reply(`❌ | Failed to ban member: ${e.message}`);
+        return ctx.reply(`❌ | Failed to ban user: ${e.message}`);
       }
     },
   },
   {
-    name: 'unban', description: 'Unban a user by ID | فك حظر عضو عبر الآيدي', permission: PermissionFlagsBits.BanMembers,
+    name: 'unban', description: 'Unban a user by ID', permission: PermissionFlagsBits.BanMembers,
     options: [{ name: 'user_id', type: 'string', required: true, description: 'The ID of the user to unban' }],
     execute: async (ctx) => {
       const id = ctx.getString('user_id');
@@ -102,12 +111,12 @@ const commands = [
         const user = await ctx.client.users.fetch(id).catch(() => null);
         await ctx.guild.bans.remove(id, 'Unbanned via command');
         const name = user ? user.username : id;
-        return ctx.reply(`✅ | User **${name}** has been unbanned!`);
+        return ctx.reply(`✅ | **${name}** has been unbanned!`);
       } catch { return ctx.reply('❌ | No ban found for this ID.'); }
     },
   },
   {
-    name: 'kick', description: 'Kick a member from the server | طرد عضو من السيرفر', permission: PermissionFlagsBits.KickMembers,
+    name: 'kick', description: 'Kick a member from the server', permission: PermissionFlagsBits.KickMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to kick' },
       { name: 'reason', type: 'string', required: false, consumeRest: true, description: 'Reason for the kick' },
@@ -126,7 +135,7 @@ const commands = [
     },
   },
   {
-    name: 'vkick', description: 'Disconnect a member from their voice channel | طرد عضو من الروم الصوتي', permission: PermissionFlagsBits.MoveMembers,
+    name: 'vkick', description: 'Disconnect a member from their voice channel', permission: PermissionFlagsBits.MoveMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to disconnect' },
       { name: 'reason', type: 'string', required: false, consumeRest: true, description: 'Reason' },
@@ -140,7 +149,7 @@ const commands = [
     },
   },
   {
-    name: 'vmove', description: 'Move a member to another voice channel | نقل عضو لروم صوتي آخر', permission: PermissionFlagsBits.MoveMembers,
+    name: 'vmove', description: 'Move a member to another voice channel', permission: PermissionFlagsBits.MoveMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to move' },
       { name: 'channel', type: 'channel', required: false, channelTypes: [ChannelType.GuildVoice, ChannelType.GuildStageVoice], description: 'Target voice channel (optional)' },
@@ -177,7 +186,7 @@ const commands = [
     },
   },
   {
-    name: 'timeout', description: 'Timeout a member | إسكات مؤقت لعضو', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'timeout', description: 'Timeout a member', permission: PermissionFlagsBits.ModerateMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to timeout' },
       { name: 'duration', type: 'string', required: true, description: 'Duration, e.g. 10m, 2h, 1d' },
@@ -200,7 +209,7 @@ const commands = [
     },
   },
   {
-    name: 'untimeout', description: 'Remove a timeout from a member | إلغاء الإسكات المؤقت', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'untimeout', description: 'Remove a timeout from a member', permission: PermissionFlagsBits.ModerateMembers,
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
@@ -214,7 +223,7 @@ const commands = [
     },
   },
   {
-    name: 'mute', description: 'Mute a member for a duration | كتم عضو لمدة محددة', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'mute', description: 'Mute a member for a duration', permission: PermissionFlagsBits.ModerateMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to mute' },
       { name: 'duration', type: 'string', required: true, description: 'Duration, e.g. 10m, 2h, 1d' },
@@ -237,7 +246,7 @@ const commands = [
     },
   },
   {
-    name: 'unmute', description: 'Remove a mute from a member | إلغاء الكتم', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'unmute', description: 'Remove a mute from a member', permission: PermissionFlagsBits.ModerateMembers,
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
@@ -251,7 +260,7 @@ const commands = [
     },
   },
   {
-    name: 'mutetext', description: 'Mute a member from text channels | كتم عضو عن الكتابة', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'mutetext', description: 'Mute a member from text channels', permission: PermissionFlagsBits.ModerateMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member' },
       { name: 'reason', type: 'string', required: false, consumeRest: true, description: 'Reason' },
@@ -266,7 +275,7 @@ const commands = [
     },
   },
   {
-    name: 'unmutetext', description: 'Unmute a member from text channels | إلغاء كتم الكتابة', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'unmutetext', description: 'Unmute a member from text channels', permission: PermissionFlagsBits.ModerateMembers,
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
@@ -277,7 +286,7 @@ const commands = [
     },
   },
   {
-    name: 'mutevoice', description: 'Server-mute a member in voice | كتم صوت عضو', permission: PermissionFlagsBits.MuteMembers,
+    name: 'mutevoice', description: 'Server-mute a member in voice', permission: PermissionFlagsBits.MuteMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member' },
       { name: 'reason', type: 'string', required: false, consumeRest: true, description: 'Reason' },
@@ -291,7 +300,7 @@ const commands = [
     },
   },
   {
-    name: 'unmutevoice', description: 'Remove voice mute from a member | إلغاء كتم صوت عضو', permission: PermissionFlagsBits.MuteMembers,
+    name: 'unmutevoice', description: 'Remove voice mute from a member', permission: PermissionFlagsBits.MuteMembers,
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
@@ -301,7 +310,7 @@ const commands = [
     },
   },
   {
-    name: 'warn', description: 'Warn a member | إضافة تحذير لعضو', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'warn', description: 'Warn a member', permission: PermissionFlagsBits.ModerateMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member' },
       { name: 'reason', type: 'string', required: true, consumeRest: true, description: 'Reason for the warning' },
@@ -316,7 +325,7 @@ const commands = [
     },
   },
   {
-    name: 'warn_remove', description: 'Remove a specific warning | حذف تحذير معين', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'warn_remove', description: 'Remove a specific warning', permission: PermissionFlagsBits.ModerateMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member' },
       { name: 'warn_id', type: 'string', required: true, description: 'The warning ID' },
@@ -331,7 +340,7 @@ const commands = [
     },
   },
   {
-    name: 'clearwarns', description: 'Clear all warnings for a member | حذف كل تحذيرات عضو', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'clearwarns', description: 'Clear all warnings for a member', permission: PermissionFlagsBits.ModerateMembers,
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
@@ -342,7 +351,7 @@ const commands = [
     },
   },
   {
-    name: 'clear', description: 'Bulk delete messages (1-100) | حذف عدد من الرسائل', permission: PermissionFlagsBits.ManageMessages,
+    name: 'clear', description: 'Bulk delete messages (1-100)', permission: PermissionFlagsBits.ManageMessages,
     options: [{ name: 'amount', type: 'integer', required: true, description: 'Number of messages to delete (1-100)' }],
     execute: async (ctx) => {
       let amount = ctx.getInteger('amount');
@@ -371,7 +380,7 @@ const commands = [
     },
   },
   {
-    name: 'setnick', description: 'Change a member\'s nickname | تغيير اسم عضو', permission: PermissionFlagsBits.ManageNicknames,
+    name: 'setnick', description: 'Change a member\'s nickname', permission: PermissionFlagsBits.ManageNicknames,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member' },
       { name: 'nickname', type: 'string', required: true, consumeRest: true, description: 'New nickname' },
@@ -387,7 +396,7 @@ const commands = [
     },
   },
   {
-    name: 'lock', description: 'Lock a channel | قفل الروم', permission: PermissionFlagsBits.ManageChannels,
+    name: 'lock', description: 'Lock a channel', permission: PermissionFlagsBits.ManageChannels,
     options: [{ name: 'channel', type: 'channel', required: false, description: 'The channel (optional)' }],
     execute: async (ctx) => {
       const targetChannel = ctx.getChannel('channel') || ctx.channel;
@@ -396,7 +405,7 @@ const commands = [
     },
   },
   {
-    name: 'unlock', description: 'Unlock a channel | فتح الروم', permission: PermissionFlagsBits.ManageChannels,
+    name: 'unlock', description: 'Unlock a channel', permission: PermissionFlagsBits.ManageChannels,
     options: [{ name: 'channel', type: 'channel', required: false, description: 'The channel (optional)' }],
     execute: async (ctx) => {
       const targetChannel = ctx.getChannel('channel') || ctx.channel;
@@ -405,7 +414,7 @@ const commands = [
     },
   },
   {
-    name: 'role', description: 'Toggle a role on a member | تبديل رتبة على عضو', permission: PermissionFlagsBits.ManageRoles,
+    name: 'role', description: 'Toggle a role on a member', permission: PermissionFlagsBits.ManageRoles,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member' },
       { name: 'role', type: 'role', required: true, description: 'The role' },
@@ -424,7 +433,7 @@ const commands = [
     },
   },
   {
-    name: 'slowmode', description: 'Set slowmode for a channel | ضبط الوضع البطيء', permission: PermissionFlagsBits.ManageChannels,
+    name: 'slowmode', description: 'Set slowmode for a channel', permission: PermissionFlagsBits.ManageChannels,
     options: [
       { name: 'seconds', type: 'integer', required: true, description: 'Seconds (0 to disable)' },
       { name: 'channel', type: 'channel', required: false, description: 'The channel (optional)' },
@@ -442,7 +451,7 @@ const commands = [
     },
   },
   {
-    name: 'help', description: 'View the interactive help menu | قائمة المساعدة', options: [
+    name: 'help', description: 'View the interactive help menu', options: [
       { name: 'command', type: 'string', required: false, description: 'View details for a specific command' },
     ],
     execute: async (ctx) => {
