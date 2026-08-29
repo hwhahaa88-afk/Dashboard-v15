@@ -2,14 +2,6 @@ const { PermissionFlagsBits, ChannelType } = require('discord.js');
 const { getWarnings, addWarning, removeWarning, clearWarnings, getPoints, addPoints } = require('./database');
 const { buildMainHelpEmbed, buildCategoryEmbed, buildCommandDetailEmbed, buildHelpSelectRow } = require('./helpHelper');
 
-function r(emoji, text) { return `${emoji} | ${text}`; }
-
-function resolveChannelMention(guild, raw) {
-  if (!raw) return null;
-  const id = raw.replace(/[<#>]/g, '');
-  return guild.channels.cache.get(id) || null;
-}
-
 function formatUptime(ms) {
   const sec = Math.floor(ms / 1000);
   const days = Math.floor(sec / 86400);
@@ -83,21 +75,20 @@ const commands = [
       const reason = ctx.getString('reason') || 'No reason provided';
       let bulk = ctx.getInteger('bulk') || 0;
       const time = ctx.getString('time');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!member.bannable) return ctx.reply(r('🙄', `You can't ban ${member.user.tag}. (Check bot permissions/role hierarchy)`));
+      if (!member) return ctx.reply('❌ | Member not found.');
+      if (!member.bannable) return ctx.reply(`❌ | You can't ban ${member.user.tag}.`);
       if (bulk < 0) bulk = 0;
       if (bulk > 7) bulk = 7;
       const ms = time ? parseDuration(time) : null;
-      if (time && (!ms || ms <= 0)) return ctx.reply(r('❌', 'Invalid duration. Example: 1d, 12h, 30m'));
+      if (time && (!ms || ms <= 0)) return ctx.reply('❌ | Invalid duration. Example: 1d, 12h, 30m');
       try {
         await member.ban({ reason, deleteMessageSeconds: bulk * 86400 });
         if (ms) scheduleTempUnban(ctx.guild, member.id, ms);
-        let out = `${member.user.tag} has been banned from the server | ✈️`;
-        if (ms) out += `\n⏱️ Duration: ${time}`;
-        out += `\n📝 Reason: ${reason}`;
+        let out = `✈️ | **${member.user.tag}** has been banned!`;
+        if (ms) out += ` (Duration: ${time})`;
         return ctx.reply(out);
       } catch (e) {
-        return ctx.reply(r('❌', `Failed to ban member: ${e.message}`));
+        return ctx.reply(`❌ | Failed to ban member: ${e.message}`);
       }
     },
   },
@@ -106,11 +97,11 @@ const commands = [
     options: [{ name: 'user_id', type: 'string', required: true, description: 'The ID of the user to unban' }],
     execute: async (ctx) => {
       const id = ctx.getString('user_id');
-      if (!id) return ctx.reply(r('❌', 'You must provide a user ID.'));
+      if (!id) return ctx.reply('❌ | You must provide a user ID.');
       try {
         await ctx.guild.bans.remove(id, 'Unbanned via command');
-        return ctx.reply(r('🔓', `User ${id} has been unbanned!`));
-      } catch { return ctx.reply(r('❌', 'No ban found for this ID.')); }
+        return ctx.reply(`✅ | User **${id}** has been unbanned!`);
+      } catch { return ctx.reply('❌ | No ban found for this ID.'); }
     },
   },
   {
@@ -122,13 +113,13 @@ const commands = [
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
       const reason = ctx.getString('reason') || 'No reason provided';
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!member.kickable) return ctx.reply(r('🙄', `You can't kick ${member.user.tag}. (Check bot permissions/role hierarchy)`));
+      if (!member) return ctx.reply('❌ | Member not found.');
+      if (!member.kickable) return ctx.reply(`❌ | You can't kick ${member.user.tag}.`);
       try {
         await member.kick(reason);
-        return ctx.reply(r('👢', `${member.user.tag} has been kicked!\n📝 Reason: ${reason}`));
+        return ctx.reply(`✅ | **${member.user.tag}** has been kicked!`);
       } catch (e) {
-        return ctx.reply(r('❌', `Failed to kick member: ${e.message}`));
+        return ctx.reply(`❌ | Failed to kick member: ${e.message}`);
       }
     },
   },
@@ -140,10 +131,10 @@ const commands = [
     ],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!member.voice.channel) return ctx.reply(r('❌', 'Member is not in a voice channel.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
+      if (!member.voice.channel) return ctx.reply('❌ | Member is not in a voice channel.');
       await member.voice.disconnect(ctx.getString('reason') || 'Voice kick via command');
-      return ctx.reply(r('🔊', `${member.user.tag} has been kicked from the voice channel!`));
+      return ctx.reply(`✅ | **${member.user.tag}** has been kicked from the voice channel!`);
     },
   },
   {
@@ -155,11 +146,11 @@ const commands = [
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
       const channel = ctx.getChannel('channel');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!member.voice.channel) return ctx.reply(r('❌', 'Member is not in a voice channel.'));
-      if (!channel || channel.type !== ChannelType.GuildVoice) return ctx.reply(r('❌', 'You must specify a valid voice channel.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
+      if (!member.voice.channel) return ctx.reply('❌ | Member is not in a voice channel.');
+      if (!channel || channel.type !== ChannelType.GuildVoice) return ctx.reply('❌ | You must specify a valid voice channel.');
       await member.voice.setChannel(channel);
-      return ctx.reply(r('🔀', `${member.user.tag} has been moved to #${channel.name}!`));
+      return ctx.reply(`✅ | **${member.user.tag}** has been moved to #${channel.name}!`);
     },
   },
   {
@@ -174,14 +165,14 @@ const commands = [
       const durationRaw = ctx.getString('duration');
       const reason = ctx.getString('reason') || 'No reason provided';
       const ms = parseDuration(durationRaw);
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!ms || ms <= 0 || ms > 28 * 86400000) return ctx.reply(r('❌', 'Invalid duration (max 28 days). Example: 10m, 2h, 1d'));
-      if (!member.moderatable) return ctx.reply(r('🙄', `You can't timeout ${member.user.tag}. (Check bot permissions/role hierarchy)`));
+      if (!member) return ctx.reply('❌ | Member not found.');
+      if (!ms || ms <= 0 || ms > 28 * 86400000) return ctx.reply('❌ | Invalid duration (max 28 days). Example: 10m, 2h, 1d');
+      if (!member.moderatable) return ctx.reply(`❌ | You can't timeout ${member.user.tag}.`);
       try {
         await member.timeout(ms, reason);
-        return ctx.reply(r('⏱️', `${member.user.tag} has been timed out for ${durationRaw}!\n📝 Reason: ${reason}`));
+        return ctx.reply(`✅ | **${member.user.tag}** has been timed out for ${durationRaw}!`);
       } catch (e) {
-        return ctx.reply(r('❌', `Failed to timeout member: ${e.message}`));
+        return ctx.reply(`❌ | Failed to timeout member: ${e.message}`);
       }
     },
   },
@@ -190,17 +181,17 @@ const commands = [
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
       try {
         await member.timeout(null);
-        return ctx.reply(r('✅', `${member.user.tag}'s timeout has been removed!`));
+        return ctx.reply(`✅ | **${member.user.tag}**'s timeout has been removed!`);
       } catch (e) {
-        return ctx.reply(r('❌', `Failed to remove timeout: ${e.message}`));
+        return ctx.reply(`❌ | Failed to remove timeout: ${e.message}`);
       }
     },
   },
   {
-    name: 'mute', description: 'Mute a member for a duration (alias of timeout) | كتم عضو لمدة محددة', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'mute', description: 'Mute a member for a duration | كتم عضو لمدة محددة', permission: PermissionFlagsBits.ModerateMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to mute' },
       { name: 'duration', type: 'string', required: true, description: 'Duration, e.g. 10m, 2h, 1d' },
@@ -211,33 +202,33 @@ const commands = [
       const durationRaw = ctx.getString('duration');
       const reason = ctx.getString('reason') || 'No reason provided';
       const ms = parseDuration(durationRaw);
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!ms || ms <= 0 || ms > 28 * 86400000) return ctx.reply(r('❌', 'Invalid duration (max 28 days). Example: 10m, 2h, 1d'));
-      if (!member.moderatable) return ctx.reply(r('🙄', `You can't mute ${member.user.tag}. (Check bot permissions/role hierarchy)`));
+      if (!member) return ctx.reply('❌ | Member not found.');
+      if (!ms || ms <= 0 || ms > 28 * 86400000) return ctx.reply('❌ | Invalid duration (max 28 days). Example: 10m, 2h, 1d');
+      if (!member.moderatable) return ctx.reply(`❌ | You can't mute ${member.user.tag}.`);
       try {
         await member.timeout(ms, reason);
-        return ctx.reply(r('🔇', `${member.user.tag} has been muted for ${durationRaw}!\n📝 Reason: ${reason}`));
+        return ctx.reply(`✅ | **${member.user.tag}** has been muted for ${durationRaw}!`);
       } catch (e) {
-        return ctx.reply(r('❌', `Failed to mute member: ${e.message}`));
+        return ctx.reply(`❌ | Failed to mute member: ${e.message}`);
       }
     },
   },
   {
-    name: 'unmute', description: 'Remove a mute from a member (alias of untimeout) | إلغاء الكتم', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'unmute', description: 'Remove a mute from a member | إلغاء الكتم', permission: PermissionFlagsBits.ModerateMembers,
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
       try {
         await member.timeout(null);
-        return ctx.reply(r('🔊', `${member.user.tag} has been unmuted!`));
+        return ctx.reply(`✅ | **${member.user.tag}** has been unmuted!`);
       } catch (e) {
-        return ctx.reply(r('❌', `Failed to unmute member: ${e.message}`));
+        return ctx.reply(`❌ | Failed to unmute member: ${e.message}`);
       }
     },
   },
   {
-    name: 'mutetext', description: 'Mute a member from all text channels | كتم عضو عن الكتابة', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'mutetext', description: 'Mute a member from text channels | كتم عضو عن الكتابة', permission: PermissionFlagsBits.ModerateMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member' },
       { name: 'reason', type: 'string', required: false, consumeRest: true, description: 'Reason' },
@@ -245,10 +236,10 @@ const commands = [
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
       const reason = ctx.getString('reason') || 'No reason provided';
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
       const role = await ensureMutedRole(ctx.guild);
       await member.roles.add(role, reason);
-      return ctx.reply(r('🔇', `${member.user.tag} has been muted from text!\n📝 Reason: ${reason}`));
+      return ctx.reply(`✅ | **${member.user.tag}** has been muted from text!`);
     },
   },
   {
@@ -256,10 +247,10 @@ const commands = [
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
       const role = await ensureMutedRole(ctx.guild);
       await member.roles.remove(role);
-      return ctx.reply(r('🔊', `${member.user.tag} has been unmuted from text!`));
+      return ctx.reply(`✅ | **${member.user.tag}** has been unmuted from text!`);
     },
   },
   {
@@ -270,10 +261,10 @@ const commands = [
     ],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!member.voice.channel) return ctx.reply(r('❌', 'Member is not in a voice channel.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
+      if (!member.voice.channel) return ctx.reply('❌ | Member is not in a voice channel.');
       await member.voice.setMute(true, ctx.getString('reason') || 'Voice mute via command');
-      return ctx.reply(r('🔇', `${member.user.tag} has been muted from voice!`));
+      return ctx.reply(`✅ | **${member.user.tag}** has been muted from voice!`);
     },
   },
   {
@@ -281,33 +272,9 @@ const commands = [
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
       await member.voice.setMute(false, 'Voice unmute via command');
-      return ctx.reply(r('🔊', `${member.user.tag} has been unmuted from voice!`));
-    },
-  },
-  {
-    name: 'vmute', description: 'Server-mute a member in voice (alias of mutevoice) | كتم صوتي', permission: PermissionFlagsBits.MuteMembers,
-    options: [
-      { name: 'user', type: 'user', required: true, description: 'The member' },
-      { name: 'reason', type: 'string', required: false, consumeRest: true, description: 'Reason' },
-    ],
-    execute: async (ctx) => {
-      const member = await getTargetMember(ctx, 'user');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!member.voice.channel) return ctx.reply(r('❌', 'Member is not in a voice channel.'));
-      await member.voice.setMute(true, ctx.getString('reason') || 'Voice mute via command');
-      return ctx.reply(r('🔇', `${member.user.tag} has been muted from voice!`));
-    },
-  },
-  {
-    name: 'vunmute', description: 'Remove voice mute from a member (alias of unmutevoice) | إلغاء الكتم الصوتي', permission: PermissionFlagsBits.MuteMembers,
-    options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
-    execute: async (ctx) => {
-      const member = await getTargetMember(ctx, 'user');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      await member.voice.setMute(false, 'Voice unmute via command');
-      return ctx.reply(r('🔊', `${member.user.tag} has been unmuted from voice!`));
+      return ctx.reply(`✅ | **${member.user.tag}** has been unmuted from voice!`);
     },
   },
   {
@@ -319,10 +286,10 @@ const commands = [
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
       const reason = ctx.getString('reason');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!reason) return ctx.reply(r('❌', 'You must provide a reason.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
+      if (!reason) return ctx.reply('❌ | You must provide a reason.');
       const warning = addWarning(ctx.guild.id, member.id, reason, ctx.invoker.id);
-      return ctx.reply(r('⚠️', `${member.user.tag} warned!\n📝 Reason: ${reason}\n🆔 Warn ID: ${warning.id}`));
+      return ctx.reply(`✅ | **${member.user.tag}** has been warned! (ID: ${warning.id})`);
     },
   },
   {
@@ -334,22 +301,10 @@ const commands = [
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
       const warnId = ctx.getString('warn_id');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
       const removed = removeWarning(ctx.guild.id, member.id, warnId);
-      if (!removed) return ctx.reply(r('❌', 'No warning found with this ID.'));
-      return ctx.reply(r('✅', `Warning ${warnId} has been removed from ${member.user.tag}!`));
-    },
-  },
-  {
-    name: 'warnings', description: 'View a member\'s warning history | عرض تحذيرات عضو', permission: PermissionFlagsBits.ModerateMembers,
-    options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
-    execute: async (ctx) => {
-      const member = await getTargetMember(ctx, 'user');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      const warns = getWarnings(ctx.guild.id, member.id);
-      if (!warns.length) return ctx.reply(r('✅', `${member.user.tag} has no warnings.`));
-      const list = warns.map((w, i) => `${i + 1}. ${w.id} - ${w.reason} (by <@${w.moderator_id}>)`).join('\n');
-      return ctx.reply(r('⚠️', `Warnings — ${member.user.tag}\n${list}`));
+      if (!removed) return ctx.reply('❌ | No warning found with this ID.');
+      return ctx.reply(`✅ | Warning **${warnId}** has been removed from **${member.user.tag}**!`);
     },
   },
   {
@@ -357,10 +312,10 @@ const commands = [
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
       const count = clearWarnings(ctx.guild.id, member.id);
-      if (!count) return ctx.reply(r('✅', `${member.user.tag} had no warnings to clear.`));
-      return ctx.reply(r('🧹', `Cleared ${count} warning(s) for ${member.user.tag}!`));
+      if (!count) return ctx.reply(`❌ | **${member.user.tag}** has no warnings to clear.`);
+      return ctx.reply(`✅ | Cleared **${count}** warning(s) for **${member.user.tag}**!`);
     },
   },
   {
@@ -368,10 +323,10 @@ const commands = [
     options: [{ name: 'amount', type: 'integer', required: true, description: 'Number of messages to delete (1-100)' }],
     execute: async (ctx) => {
       let amount = ctx.getInteger('amount');
-      if (!amount || amount < 1) return ctx.reply(r('❌', 'Enter a number between 1 and 100.'));
+      if (!amount || amount < 1) return ctx.reply('❌ | Enter a number between 1 and 100.');
       if (amount > 100) amount = 100;
       const deleted = await ctx.channel.bulkDelete(amount, true);
-      const msg = await ctx.reply(r('🧹', `Cleared ${deleted.size} messages!`));
+      const msg = await ctx.reply(`✅ | Cleared **${deleted.size}** messages!`);
       if (!ctx.isSlash && msg?.delete) setTimeout(() => msg.delete().catch(() => {}), 4000);
     },
   },
@@ -384,29 +339,11 @@ const commands = [
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
       const nickname = ctx.getString('nickname');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!nickname) return ctx.reply(r('❌', 'You must provide a nickname.'));
-      if (!member.manageable) return ctx.reply(r('🙄', `You can't edit ${member.user.tag}'s nickname.`));
+      if (!member) return ctx.reply('❌ | Member not found.');
+      if (!nickname) return ctx.reply('❌ | You must provide a nickname.');
+      if (!member.manageable) return ctx.reply(`❌ | You can't edit ${member.user.tag}'s nickname.`);
       await member.setNickname(nickname);
-      return ctx.reply(r('🏷️', `${member.user.tag}'s nickname has been changed to ${nickname}!`));
-    },
-  },
-  {
-    name: 'points', description: 'Manage member points | نظام نقاط الأعضاء', permission: PermissionFlagsBits.ManageGuild,
-    options: [
-      { name: 'action', type: 'string', required: true, description: 'add / remove / show' },
-      { name: 'user', type: 'user', required: true, description: 'The member' },
-      { name: 'amount', type: 'integer', required: false, description: 'Points amount' },
-    ],
-    execute: async (ctx) => {
-      const action = (ctx.getString('action') || '').toLowerCase();
-      const member = await getTargetMember(ctx, 'user');
-      const amount = ctx.getInteger('amount') || 0;
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (action === 'add') return ctx.reply(r('✅', `Added ${Math.abs(amount)} points to ${member.user.tag}! Balance: ${addPoints(ctx.guild.id, member.id, Math.abs(amount))}`));
-      if (action === 'remove') return ctx.reply(r('✅', `Removed ${Math.abs(amount)} points from ${member.user.tag}! Balance: ${addPoints(ctx.guild.id, member.id, -Math.abs(amount))}`));
-      if (action === 'show') return ctx.reply(r('📊', `${member.user.tag}'s balance: ${getPoints(ctx.guild.id, member.id)} points.`));
-      return ctx.reply(r('❌', 'Invalid action, use: add / remove / show'));
+      return ctx.reply(`✅ | **${member.user.tag}**'s nickname has been changed to **${nickname}**!`);
     },
   },
   {
@@ -415,7 +352,7 @@ const commands = [
     execute: async (ctx) => {
       const channel = ctx.getChannel('channel') || ctx.channel;
       await channel.permissionOverwrites.edit(ctx.guild.roles.everyone, { SendMessages: false });
-      return ctx.reply(r('🔒', `#${channel.name} has been locked!`));
+      return ctx.reply(`✅ | **#${channel.name}** has been locked!`);
     },
   },
   {
@@ -424,7 +361,7 @@ const commands = [
     execute: async (ctx) => {
       const channel = ctx.getChannel('channel') || ctx.channel;
       await channel.permissionOverwrites.edit(ctx.guild.roles.everyone, { SendMessages: true });
-      return ctx.reply(r('🔓', `#${channel.name} has been unlocked!`));
+      return ctx.reply(`✅ | **#${channel.name}** has been unlocked!`);
     },
   },
   {
@@ -436,61 +373,14 @@ const commands = [
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
       const role = ctx.getRole('role');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!role) return ctx.reply(r('❌', 'Role not found.'));
+      if (!member) return ctx.reply('❌ | Member not found.');
+      if (!role) return ctx.reply('❌ | Role not found.');
       if (member.roles.cache.has(role.id)) {
         await member.roles.remove(role);
-        return ctx.reply(r('✅', `Role ${role.name} has been removed from ${member.user.tag}!`));
+        return ctx.reply(`✅ | Role **${role.name}** removed from **${member.user.tag}**!`);
       }
       await member.roles.add(role);
-      return ctx.reply(r('✅', `Role ${role.name} has been added to ${member.user.tag}!`));
-    },
-  },
-  {
-    name: 'role-add', description: 'Add a role to a member | إضافة رتبة لعضو', permission: PermissionFlagsBits.ManageRoles,
-    options: [
-      { name: 'user', type: 'user', required: true, description: 'The member' },
-      { name: 'role', type: 'role', required: true, description: 'The role' },
-    ],
-    execute: async (ctx) => {
-      const member = await getTargetMember(ctx, 'user');
-      const role = ctx.getRole('role');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!role) return ctx.reply(r('❌', 'Role not found.'));
-      if (member.roles.cache.has(role.id)) return ctx.reply(r('🙄', `${member.user.tag} already has the role ${role.name}.`));
-      await member.roles.add(role);
-      return ctx.reply(r('✅', `Role ${role.name} has been added to ${member.user.tag}!`));
-    },
-  },
-  {
-    name: 'role-remove', description: 'Remove a role from a member | إزالة رتبة من عضو', permission: PermissionFlagsBits.ManageRoles,
-    options: [
-      { name: 'user', type: 'user', required: true, description: 'The member' },
-      { name: 'role', type: 'role', required: true, description: 'The role' },
-    ],
-    execute: async (ctx) => {
-      const member = await getTargetMember(ctx, 'user');
-      const role = ctx.getRole('role');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!role) return ctx.reply(r('❌', 'Role not found.'));
-      if (!member.roles.cache.has(role.id)) return ctx.reply(r('🙄', `${member.user.tag} doesn't have the role ${role.name}.`));
-      await member.roles.remove(role);
-      return ctx.reply(r('✅', `Role ${role.name} has been removed from ${member.user.tag}!`));
-    },
-  },
-  {
-    name: 'setcolor', description: 'Change a role\'s color | تغيير لون رتبة', permission: PermissionFlagsBits.ManageRoles,
-    options: [
-      { name: 'role', type: 'role', required: true, description: 'The role' },
-      { name: 'color', type: 'string', required: true, description: 'HEX color, e.g. #ff0000' },
-    ],
-    execute: async (ctx) => {
-      const role = ctx.getRole('role');
-      const color = ctx.getString('color');
-      if (!role) return ctx.reply(r('❌', 'Role not found.'));
-      if (!color || !/^#?[0-9a-fA-F]{6}$/.test(color)) return ctx.reply(r('❌', 'Invalid color format, use e.g. #ff0000'));
-      await role.setColor(color.startsWith('#') ? color : `#${color}`);
-      return ctx.reply(r('🎨', `Role ${role.name}'s color has been updated!`));
+      return ctx.reply(`✅ | Role **${role.name}** added to **${member.user.tag}**!`);
     },
   },
   {
@@ -502,71 +392,9 @@ const commands = [
     execute: async (ctx) => {
       const seconds = ctx.getInteger('seconds');
       const channel = ctx.getChannel('channel') || ctx.channel;
-      if (seconds === null || seconds < 0 || seconds > 21600) return ctx.reply(r('❌', 'Value must be between 0 and 21600 seconds.'));
+      if (seconds === null || seconds < 0 || seconds > 21600) return ctx.reply('❌ | Value must be between 0 and 21600 seconds.');
       await channel.setRateLimitPerUser(seconds);
-      return ctx.reply(seconds === 0 ? r('✅', `Slowmode disabled in #${channel.name}!`) : r('🐢', `Slowmode set to ${seconds}s in #${channel.name}!`));
-    },
-  },
-  {
-    name: 'embed', description: 'Send a custom announcement message | إرسال رسالة مخصصة', permission: PermissionFlagsBits.ManageMessages,
-    options: [
-      { name: 'title', type: 'string', required: true, description: 'Message title' },
-      { name: 'description', type: 'string', required: true, consumeRest: true, description: 'Message text' },
-      { name: 'channel', type: 'channel', required: false, description: 'The channel (optional)' },
-    ],
-    execute: async (ctx) => {
-      let title, description, channel;
-      if (ctx.isSlash) {
-        title = ctx.getString('title');
-        description = ctx.getString('description');
-        channel = ctx.getChannel('channel') || ctx.channel;
-      } else {
-        const tokens = [...(ctx.args || [])];
-        channel = ctx.channel;
-        if (tokens[0] && /^<#\d+>$/.test(tokens[0])) channel = resolveChannelMention(ctx.guild, tokens.shift()) || ctx.channel;
-        if (!tokens.length) return ctx.reply(r('❌', 'Usage: -embed [#channel] title | description'));
-        const [t, d] = tokens.join(' ').split('|').map((s) => s?.trim());
-        title = t || 'Announcement';
-        description = d || t;
-      }
-      await channel.send({ content: `📢 **${title}**\n${description}` });
-      return ctx.reply(r('✅', `Message sent to ${channel}!`));
-    },
-  },
-  {
-    name: 'say', description: 'Make the bot send a message | إرسال رسالة بواسطة البوت', permission: PermissionFlagsBits.ManageMessages,
-    options: [
-      { name: 'message', type: 'string', required: true, consumeRest: true, description: 'The message content' },
-      { name: 'channel', type: 'channel', required: false, description: 'The channel (optional)' },
-    ],
-    execute: async (ctx) => {
-      let message, channel;
-      if (ctx.isSlash) {
-        message = ctx.getString('message');
-        channel = ctx.getChannel('channel') || ctx.channel;
-      } else {
-        const tokens = [...(ctx.args || [])];
-        channel = ctx.channel;
-        if (tokens[0] && /^<#\d+>$/.test(tokens[0])) channel = resolveChannelMention(ctx.guild, tokens.shift()) || ctx.channel;
-        message = tokens.join(' ');
-      }
-      if (!message) return ctx.reply(r('❌', 'You must provide a message.'));
-      await channel.send({ content: message });
-      return ctx.reply(r('✅', `Message sent to ${channel}!`));
-    },
-  },
-  {
-    name: 'botinfo', description: 'View bot info and status | عرض معلومات البوت', options: [],
-    execute: async (ctx) => {
-      const client = ctx.raw.client;
-      const text = [
-        r('🤖', 'OS System Engine — Bot Info'),
-        `📡 Servers: ${client.guilds.cache.size}`,
-        `👥 Users: ${client.guilds.cache.reduce((a, g) => a + g.memberCount, 0)}`,
-        `📶 Ping: ${client.ws.ping}ms`,
-        `⏱️ Uptime: ${formatUptime(client.uptime)}`,
-      ].join('\n');
-      return ctx.reply(text);
+      return ctx.reply(seconds === 0 ? `✅ | Slowmode disabled in **#${channel.name}**!` : `✅ | Slowmode set to **${seconds}s** in **#${channel.name}**!`);
     },
   },
   {
@@ -579,19 +407,19 @@ const commands = [
         const user = ctx.invoker.user;
         if (commandName) {
           const detailEmbed = buildCommandDetailEmbed(commandName.toLowerCase().trim(), user);
-          if (!detailEmbed) return ctx.raw.reply({ content: r('❌', `Command \`${commandName}\` not found.`), ephemeral: true });
+          if (!detailEmbed) return ctx.raw.reply({ content: `❌ | Command \`${commandName}\` not found.`, ephemeral: true });
           return ctx.raw.reply({ embeds: [detailEmbed], ephemeral: true });
         }
         await ctx.raw.reply({ embeds: [buildMainHelpEmbed(user)], components: [buildHelpSelectRow()], ephemeral: true });
         const message = await ctx.raw.fetchReply();
         const collector = message.createMessageComponentCollector({ time: 60000 });
         collector.on('collect', async (i) => {
-          if (i.user.id !== user.id) return i.reply({ content: r('❌', 'This menu is not for you.'), ephemeral: true });
+          if (i.user.id !== user.id) return i.reply({ content: '❌ | This menu is not for you.', ephemeral: true });
           await i.update({ embeds: [buildCategoryEmbed(i.values[0], user)] });
         });
         collector.on('end', async () => { try { await message.edit({ components: [] }); } catch {} });
       } else {
-        await ctx.raw.reply('ℹ️ | Use the slash command `/help` for a private, interactive help menu (visible only to you).');
+        await ctx.raw.reply('ℹ️ | Use `/help` for an interactive menu.');
       }
     },
   },
