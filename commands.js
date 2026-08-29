@@ -175,7 +175,7 @@ const commands = [
     },
   },
   {
-    name: 'timeout', description: 'Timeout a member | إسكات مؤقت لعضو', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'timeout', description: 'Timeout a member | إسكات مؤقتلعضو', permission: PermissionFlagsBits.ModerateMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to timeout' },
       { name: 'duration', type: 'string', required: true, description: 'Duration, e.g. 10m, 2h, 1d' },
@@ -344,11 +344,28 @@ const commands = [
     options: [{ name: 'amount', type: 'integer', required: true, description: 'Number of messages to delete (1-100)' }],
     execute: async (ctx) => {
       let amount = ctx.getInteger('amount');
-      if (!amount || amount < 1) return ctx.reply('❌ | Enter a number between 1 and 100.');
+      if (!amount || amount < 1) return ctx.reply({ content: '❌ | Enter a number between 1 and 100.', ephemeral: true });
       if (amount > 100) amount = 100;
-      const deleted = await ctx.channel.bulkDelete(amount, true);
-      const msg = await ctx.reply(`✅ | Cleared **${deleted.size}** messages!`);
-      if (!ctx.isSlash && msg?.delete) setTimeout(() => msg.delete().catch(() => {}), 4000);
+
+      if (ctx.isSlash) {
+        await ctx.raw.deferReply({ ephemeral: true }).catch(() => {});
+      }
+
+      try {
+        const deleted = await ctx.channel.bulkDelete(amount, true);
+        if (ctx.isSlash) {
+          return await ctx.raw.editReply({ content: `✅ | Cleared **${deleted.size}** messages!` });
+        } else {
+          const msg = await ctx.reply(`✅ | Cleared **${deleted.size}** messages!`);
+          if (msg?.delete) setTimeout(() => msg.delete().catch(() => {}), 4000);
+        }
+      } catch (e) {
+        if (ctx.isSlash) {
+          return await ctx.raw.editReply({ content: `❌ | Failed to clear messages: ${e.message}` });
+        } else {
+          return ctx.reply(`❌ | Failed to clear messages: ${e.message}`);
+        }
+      }
     },
   },
   {
