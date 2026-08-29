@@ -150,7 +150,7 @@ const commands = [
       if (!member.voice.channel) return ctx.reply('❌ | Member is not in a voice channel.');
       if (!channel || channel.type !== ChannelType.GuildVoice) return ctx.reply('❌ | You must specify a valid voice channel.');
       await member.voice.setChannel(channel);
-      return ctx.reply(`✅ | **${member.user.tag}** has been moved to #${channel.name}!`);
+      return ctx.reply(`✅ | **${member.user.tag}** has been moved to <#${channel.id}>!`);
     },
   },
   {
@@ -352,7 +352,7 @@ const commands = [
     execute: async (ctx) => {
       const channel = ctx.getChannel('channel') || ctx.channel;
       await channel.permissionOverwrites.edit(ctx.guild.roles.everyone, { SendMessages: false });
-      return ctx.reply(`✅ | **#${channel.name}** has been locked!`);
+      return ctx.reply(`✅ | <#${channel.id}> has been locked!`);
     },
   },
   {
@@ -361,7 +361,7 @@ const commands = [
     execute: async (ctx) => {
       const channel = ctx.getChannel('channel') || ctx.channel;
       await channel.permissionOverwrites.edit(ctx.guild.roles.everyone, { SendMessages: true });
-      return ctx.reply(`✅ | **#${channel.name}** has been unlocked!`);
+      return ctx.reply(`✅ | <#${channel.id}> has been unlocked!`);
     },
   },
   {
@@ -394,7 +394,7 @@ const commands = [
       const channel = ctx.getChannel('channel') || ctx.channel;
       if (seconds === null || seconds < 0 || seconds > 21600) return ctx.reply('❌ | Value must be between 0 and 21600 seconds.');
       await channel.setRateLimitPerUser(seconds);
-      return ctx.reply(seconds === 0 ? `✅ | Slowmode disabled in **#${channel.name}**!` : `✅ | Slowmode set to **${seconds}s** in **#${channel.name}**!`);
+      return ctx.reply(seconds === 0 ? `✅ | Slowmode disabled in <#${channel.id}>!` : `✅ | Slowmode set to **${seconds}s** in <#${channel.id}>!`);
     },
   },
   {
