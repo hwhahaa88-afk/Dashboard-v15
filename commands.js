@@ -99,8 +99,8 @@ const commands = [
       const id = ctx.getString('user_id');
       if (!id) return ctx.reply('❌ | You must provide a user ID.');
       try {
-        await ctx.guild.bans.remove(id, 'Unbanned via command');
         const user = await ctx.client.users.fetch(id).catch(() => null);
+        await ctx.guild.bans.remove(id, 'Unbanned via command');
         const name = user ? user.username : id;
         return ctx.reply(`✅ | User **${name}** has been unbanned!`);
       } catch { return ctx.reply('❌ | No ban found for this ID.'); }
