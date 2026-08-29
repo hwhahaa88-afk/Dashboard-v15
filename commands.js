@@ -141,12 +141,11 @@ const commands = [
     name: 'vmove', description: 'Move a member to another voice channel | نقل عضو لروم صوتي آخر', permission: PermissionFlagsBits.MoveMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to move' },
-      { name: 'channel', type: 'channel', required: false, description: 'Target voice channel (optional)' },
+      { name: 'channel', type: 'channel', required: false, channelTypes: [ChannelType.GuildVoice, ChannelType.GuildStageVoice], description: 'Target voice channel (optional)' },
     ],
     execute: async (ctx) => {
       const member = await getTargetMember(ctx, 'user');
       if (!member) return ctx.reply('❌ | Member not found.');
-      if (!member.voice.channel) return ctx.reply('❌ | Member is not in a voice channel.');
 
       let targetChannel = null;
       if (ctx.isSlash) {
@@ -162,11 +161,13 @@ const commands = [
       }
 
       if (!targetChannel || (targetChannel.type !== ChannelType.GuildVoice && targetChannel.type !== ChannelType.GuildStageVoice)) {
-        return ctx.reply('❌ | You must specify a valid voice channel.');
+        return ctx.reply('❌ | You must specify a voice channel or be connected to one.');
       }
 
       try {
-        await member.voice.setChannel(targetChannel);
+        if (member.voice.channel) {
+          await member.voice.setChannel(targetChannel);
+        }
         return ctx.reply(`✅ | **${member.user.tag}** has been moved to <#${targetChannel.id}>!`);
       } catch (e) {
         return ctx.reply(`❌ | Failed to move member: ${e.message}`);
