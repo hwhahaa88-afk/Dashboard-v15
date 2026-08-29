@@ -100,7 +100,9 @@ const commands = [
       if (!id) return ctx.reply('❌ | You must provide a user ID.');
       try {
         await ctx.guild.bans.remove(id, 'Unbanned via command');
-        return ctx.reply(`✅ | User **${id}** has been unbanned!`);
+        const user = await ctx.client.users.fetch(id).catch(() => null);
+        const name = user ? user.tag : id;
+        return ctx.reply(`✅ | User **${name}** has been unbanned!`);
       } catch { return ctx.reply('❌ | No ban found for this ID.'); }
     },
   },
@@ -175,7 +177,7 @@ const commands = [
     },
   },
   {
-    name: 'timeout', description: 'Timeout a member | إسكات مؤقتلعضو', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'timeout', description: 'Timeout a member | إسكات مؤقت لعضو', permission: PermissionFlagsBits.ModerateMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to timeout' },
       { name: 'duration', type: 'string', required: true, description: 'Duration, e.g. 10m, 2h, 1d' },
