@@ -148,7 +148,7 @@ const commands = [
       let channel = ctx.getChannel('channel');
       if (!member) return ctx.reply('❌ | Member not found.');
       if (!member.voice.channel) return ctx.reply('❌ | Member is not in a voice channel.');
-      
+
       if (!channel) {
         const invokerMember = await ctx.guild.members.fetch(ctx.invoker.id).catch(() => null);
         channel = invokerMember?.voice?.channel;
@@ -158,8 +158,12 @@ const commands = [
         return ctx.reply('❌ | You must specify a valid voice channel.');
       }
 
-      await member.voice.setChannel(channel);
-      return ctx.reply(`✅ | **${member.user.tag}** has been moved to <#${channel.id}>!`);
+      try {
+        await member.voice.setChannel(channel);
+        return ctx.reply(`✅ | **<@${member.id}>** has been moved to <#${channel.id}>!`);
+      } catch (e) {
+        return ctx.reply(`❌ | Failed to move member: ${e.message}`);
+      }
     },
   },
   {
