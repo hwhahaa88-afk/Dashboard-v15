@@ -93,22 +93,18 @@ const commands = [
     },
   },
   {
-     {
-          name: 'unban', description: 'Unban a user by ID | فك حظر عضو عبر الآيدي', permission: PermissionFlagsBits.BanMembers,
-              options: [{ name: 'user_id', type: 'string', required: true, description: 'The ID of the user to unban' }],
-                  execute: async (ctx) => {
-                        const id = ctx.getString('user_id');
-                              if (!id) return ctx.reply('❌ | You must provide a user ID.');
-                                    try {
-                                            await ctx.guild.bans.remove(id, 'Unbanned via command');
-                                                    const user = await ctx.client.users.fetch(id).catch(() => null);
-                                                            const name = user ? user.username : id;
-                                                                    return ctx.reply(`✅ | User **${name}** has been unbanned!`);
-                                                                          } catch { return ctx.reply('❌ | No ban found for this ID.'); }
-                                                                              },
-                                                                                },
-                                                                                
-     }
+    name: 'unban', description: 'Unban a user by ID | فك حظر عضو عبر الآيدي', permission: PermissionFlagsBits.BanMembers,
+    options: [{ name: 'user_id', type: 'string', required: true, description: 'The ID of the user to unban' }],
+    execute: async (ctx) => {
+      const id = ctx.getString('user_id');
+      if (!id) return ctx.reply('❌ | You must provide a user ID.');
+      try {
+        await ctx.guild.bans.remove(id, 'Unbanned via command');
+        const user = await ctx.client.users.fetch(id).catch(() => null);
+        const name = user ? user.username : id;
+        return ctx.reply(`✅ | User **${name}** has been unbanned!`);
+      } catch { return ctx.reply('❌ | No ban found for this ID.'); }
+    },
   },
   {
     name: 'kick', description: 'Kick a member from the server | طرد عضو من السيرفر', permission: PermissionFlagsBits.KickMembers,
