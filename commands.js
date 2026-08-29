@@ -102,6 +102,7 @@ const commands = [
           scheduleTempUnban(ctx.guild, userId, msDuration);
         }
 
+        // جلب اسم المستخدم لعرضه بنص صريح بدون منشن
         let displayName = userId;
         try {
           const fetchedUser = await ctx.client.users.fetch(userId);
@@ -114,13 +115,14 @@ const commands = [
 
         const sentMsg = await ctx.reply(replyContent);
 
+        // حذف الرسالة بعد دقيقة واحدة (60000 ملي ثانية)
         setTimeout(() => {
           if (ctx.isSlash) {
             ctx.raw.deleteReply().catch(() => {});
           } else if (sentMsg && sentMsg.delete) {
             sentMsg.delete().catch(() => {});
           }
-        }, 5000);
+        }, 60000);
 
       } catch (e) {
         return ctx.reply({ content: `❌ | Failed to ban user: ${e.message}`, ephemeral: true });
@@ -146,6 +148,7 @@ const commands = [
       }
 
       try {
+        // جلب اسم المستخدم لعرضه بنص صريح بدون منشن
         let displayName = userId;
         try {
           const user = await ctx.client.users.fetch(userId);
@@ -156,13 +159,14 @@ const commands = [
 
         const sentMsg = await ctx.reply(`✅ | **${displayName}** has been unbanned!`);
 
+        // حذف الرسالة بعد دقيقة واحدة (60000 ملي ثانية)
         setTimeout(() => {
           if (ctx.isSlash) {
             ctx.raw.deleteReply().catch(() => {});
           } else if (sentMsg && sentMsg.delete) {
             sentMsg.delete().catch(() => {});
           }
-        }, 5000);
+        }, 60000);
 
       } catch (e) {
         return ctx.reply({ content: "❌ | No ban found for this ID.", ephemeral: true });
