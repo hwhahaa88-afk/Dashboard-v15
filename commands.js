@@ -1,4 +1,5 @@
 const { PermissionFlagsBits, ChannelType } = require('discord.js');
+const msLib = require('ms');
 const { getWarnings, addWarning, removeWarning, clearWarnings, getPoints, addPoints } = require('./database');
 const { buildMainHelpEmbed, buildCategoryEmbed, buildCommandDetailEmbed, buildHelpSelectRow } = require('./helpHelper');
 
@@ -24,14 +25,9 @@ async function ensureMutedRole(guild) {
 
 function parseDuration(input) {
   if (!input) return null;
-  const match = String(input).match(/^(\d+)(s|m|h|d)$/i);
-  if (!match) {
-    const n = parseInt(input, 10);
-    return Number.isNaN(n) ? null : n * 60 * 1000;
-  }
-  const value = parseInt(match[1], 10);
-  const mult = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[match[2].toLowerCase()];
-  return value * mult;
+  const duration = msLib(input);
+  if (duration === undefined) return null;
+  return duration;
 }
 
 async function getTargetMember(ctx, paramName = 'user') {
@@ -50,69 +46,148 @@ async function getTargetMember(ctx, paramName = 'user') {
   }
 }
 
-const tempBanTimers = new Map();
-function scheduleTempUnban(guild, userId, ms) {
+const tempBans = new Map();
+function scheduleTempUnban(guild, userId, duration) {
   const key = `${guild.id}-${userId}`;
-  if (tempBanTimers.has(key)) clearTimeout(tempBanTimers.get(key));
-  const timer = setTimeout(async () => {
-    try { await guild.bans.remove(userId, 'Temporary ban expired'); } catch {}
-    tempBanTimers.delete(key);
-  }, ms);
-  tempBanTimers.set(key, timer);
+  if (tempBans.has(key)) clearTimeout(tempBans.get(key));
+
+  const timeout = setTimeout(async () => {
+    try {
+      await guild.bans.remove(userId, 'Temporary ban expired');
+      tempBans.delete(key);
+    } catch (e) {
+      console.error(`Failed to unban ${userId}:`, e);
+    }
+  }, duration);
+
+  tempBans.set(key, timeout);
 }
 
 const commands = [
   {
-    name: 'ban', description: 'Ban a user from the server (inside or outside)', permission: PermissionFlagsBits.BanMembers,
+    name: 'ban',
+    description: 'Ban a user from the server (inside or outside)',
+    permission: PermissionFlagsBits.BanMembers,
     options: [
-      { name: 'user', type: 'user', required: true, description: 'The user to ban (ID or mention)' },
-      { name: 'reason', type: 'string', required: false, consumeRest: true, description: 'Reason for the ban' },
-      { name: 'bulk', type: 'integer', required: false, description: 'Delete messages from the last X days (0-7)' },
-      { name: 'time', type: 'string', required: false, description: 'Temporary ban duration' },
+      {
+        name: 'user_id',
+        type: 'string',
+        required: true,
+        description: 'The user ID to ban (or mention in text command)',
+      },
+      {
+        name: 'reason',
+        type: 'string',
+        required: false,
+        description: 'Reason for the ban',
+      },
+      {
+        name: 'bulk',
+        type: 'integer',
+        required: false,
+        description: 'Delete messages from the last X days (0-7)',
+      },
+      {
+        name: 'time',
+        type: 'string',
+        required: false,
+        description: 'Temporary ban duration (e.g. 1d, 12h, 30m)',
+      },
     ],
     execute: async (ctx) => {
-      let targetUser = null;
-      if (ctx.isSlash) {
-        targetUser = ctx.raw.options.getUser('user');
-      } else if (ctx.args[0]) {
-        const id = ctx.args[0].replace(/[<@!>]/g, '');
-        targetUser = await ctx.client.users.fetch(id).catch(() => null);
+      if (!ctx.guild.members.me.permissions.has(PermissionFlagsBits.BanMembers)) {
+        return ctx.reply("❌ | I don't have permission to ban members.");
       }
 
-      if (!targetUser) return ctx.reply('❌ | User not found.');
+      let targetUser = null;
+      let userId = null;
 
-      const reason = ctx.getString('reason') || 'No reason provided';
-      let bulk = ctx.getInteger('bulk') || 0;
-      const time = ctx.getString('time');
+      if (ctx.isSlash) {
+        userId = ctx.raw.options.getString('user_id');
+      } else if (ctx.args[0]) {
+        userId = ctx.args[0].replace(/[<@!>]/g, '');
+      }
 
-      if (bulk < 0) bulk = 0;
-      if (bulk > 7) bulk = 7;
-      const ms = time ? parseDuration(time) : null;
-      if (time && (!ms || ms <= 0)) return ctx.reply('❌ | Invalid duration. Example: 1d, 12h, 30m');
+      if (!userId) return ctx.reply('❌ | You must provide a valid user ID or mention.');
 
       try {
-        await ctx.guild.bans.create(targetUser.id, { reason, deleteMessageSeconds: bulk * 86400 });
-        if (ms) scheduleTempUnban(ctx.guild, targetUser.id, ms);
-        let out = `✈️ | **${targetUser.username}** has been banned from the server!`;
-        if (ms) out += ` (Duration: ${time})`;
-        return ctx.reply(out);
+        targetUser = await ctx.client.users.fetch(userId);
+      } catch {
+        targetUser = { id: userId, username: userId, tag: userId };
+      }
+
+      const reason = ctx.isSlash ? ctx.raw.options.getString('reason') : (ctx.args[1] || 'No reason provided');
+      let bulk = ctx.isSlash ? (ctx.raw.options.getInteger('bulk') || 0) : 0;
+      const time = ctx.isSlash ? ctx.raw.options.getString('time') : null;
+
+      bulk = Math.win ? Math.min(Math.max(bulk, 0), 7) : Math.min(Math.max(bulk || 0, 0), 7);
+
+      const msDuration = time ? parseDuration(time) : null;
+      if (time && (!msDuration || msDuration <= 0)) {
+        return ctx.reply('❌ | Invalid duration. Example: 1d, 12h, 30m');
+      }
+
+      try {
+        await ctx.guild.bans.create(userId, {
+          reason: reason,
+          deleteMessageSeconds: bulk * 86400
+        });
+
+        if (msDuration) {
+          scheduleTempUnban(ctx.guild, userId, msDuration);
+        }
+
+        const displayName = targetUser.username || userId;
+        let reply = `✈️ | **${displayName}** has been banned from the server!`;
+
+        if (time) reply += ` (Duration: ${time})`;
+        if (reason !== 'No reason provided') reply += ` \nReason: ${reason}`;
+
+        return ctx.reply(reply);
       } catch (e) {
         return ctx.reply(`❌ | Failed to ban user: ${e.message}`);
       }
     },
   },
   {
-    name: 'unban', description: 'Unban a user by ID', permission: PermissionFlagsBits.BanMembers,
-    options: [{ name: 'user_id', type: 'string', required: true, description: 'The ID of the user to unban' }],
+    name: 'unban',
+    description: 'Unban a user by ID',
+    permission: PermissionFlagsBits.BanMembers,
+    options: [
+      {
+        name: 'user_id',
+        type: 'string',
+        required: true,
+        description: 'The ID of the user to unban',
+      },
+    ],
     execute: async (ctx) => {
-      const id = ctx.getString('user_id');
-      if (!id) return ctx.reply('❌ | You must provide a user ID.');
+      if (!ctx.guild.members.me.permissions.has(PermissionFlagsBits.BanMembers)) {
+        return ctx.reply("❌ | I don't have permission to unban members.");
+      }
+
+      let userId;
+      if (ctx.isSlash) {
+        userId = ctx.raw.options.getString('user_id');
+      } else if (ctx.args[0]) {
+        userId = ctx.args[0].replace(/[<@!>]/g, '');
+      }
+
+      if (!userId) return ctx.reply('❌ | You must provide a user ID.');
+
       try {
-        const user = await ctx.client.users.fetch(id).catch(() => null);
-        await ctx.guild.bans.remove(id, 'Unbanned via command');
-        const name = user ? user.username : id;
-        return ctx.reply(`✅ | **${name}** has been unbanned!`);
-      } catch { return ctx.reply('❌ | No ban found for this ID.'); }
+        let user = null;
+        try {
+          user = await ctx.client.users.fetch(userId);
+        } catch {}
+
+        await ctx.guild.bans.remove(userId, 'Unbanned via command');
+
+        const displayName = user ? user.username : userId;
+        return ctx.reply(`✅ | **${displayName}** has been unbanned!`);
+      } catch (e) {
+        return ctx.reply("❌ | No ban found for this ID or I don't have permission.");
+      }
     },
   },
   {
@@ -380,7 +455,7 @@ const commands = [
     },
   },
   {
-    name: 'setnick', description: 'Change a member\'s nickname', permission: PermissionFlagsBits.ManageNicknames,
+    name: 'setnick', description: "Change a member's nickname", permission: PermissionFlagsBits.ManageNicknames,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member' },
       { name: 'nickname', type: 'string', required: true, consumeRest: true, description: 'New nickname' },
