@@ -350,18 +350,18 @@ const commands = [
     name: 'lock', description: 'Lock a channel | قفل الروم', permission: PermissionFlagsBits.ManageChannels,
     options: [{ name: 'channel', type: 'channel', required: false, description: 'The channel (optional)' }],
     execute: async (ctx) => {
-      const channel = ctx.getChannel('channel') || ctx.channel;
-      await channel.permissionOverwrites.edit(ctx.guild.roles.everyone, { SendMessages: false });
-      return ctx.reply(`✅ | <#${channel.id}> has been locked!`);
+      const targetChannel = ctx.getChannel('channel') || ctx.channel;
+      await targetChannel.permissionOverwrites.edit(ctx.guild.roles.everyone, { SendMessages: false });
+      return ctx.reply(`🔒 | <#${targetChannel.id}> has been locked!`);
     },
   },
   {
     name: 'unlock', description: 'Unlock a channel | فتح الروم', permission: PermissionFlagsBits.ManageChannels,
     options: [{ name: 'channel', type: 'channel', required: false, description: 'The channel (optional)' }],
     execute: async (ctx) => {
-      const channel = ctx.getChannel('channel') || ctx.channel;
-      await channel.permissionOverwrites.edit(ctx.guild.roles.everyone, { SendMessages: true });
-      return ctx.reply(`✅ | <#${channel.id}> has been unlocked!`);
+      const targetChannel = ctx.getChannel('channel') || ctx.channel;
+      await targetChannel.permissionOverwrites.edit(ctx.guild.roles.everyone, { SendMessages: true });
+      return ctx.reply(`🔓 | <#${targetChannel.id}> has been unlocked!`);
     },
   },
   {
@@ -391,10 +391,14 @@ const commands = [
     ],
     execute: async (ctx) => {
       const seconds = ctx.getInteger('seconds');
-      const channel = ctx.getChannel('channel') || ctx.channel;
+      const targetChannel = ctx.getChannel('channel') || ctx.channel;
       if (seconds === null || seconds < 0 || seconds > 21600) return ctx.reply('❌ | Value must be between 0 and 21600 seconds.');
-      await channel.setRateLimitPerUser(seconds);
-      return ctx.reply(seconds === 0 ? `✅ | Slowmode disabled in <#${channel.id}>!` : `✅ | Slowmode set to **${seconds}s** in <#${channel.id}>!`);
+      await targetChannel.setRateLimitPerUser(seconds);
+      if (seconds === 0) {
+        return ctx.reply(`🐢 | Slowmode disabled in <#${targetChannel.id}>!`);
+      } else {
+        return ctx.reply(`🐢 | Slowmode set to ${seconds}s in <#${targetChannel.id}>!`);
+      }
     },
   },
   {
