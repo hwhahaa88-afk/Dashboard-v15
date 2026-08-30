@@ -1,4 +1,4 @@
-const { REST, Routes, ApplicationCommandOptionType } = require('discord.js');
+const { REST, Routes } = require('discord.js');
 const { commands } = require('./commands.js');
 require('dotenv').config();
 
@@ -22,13 +22,10 @@ function fixOptions(options = []) {
     if (typeof type === 'string') {
       type = OPTION_TYPES[type.toLowerCase().trim()] || 3;
     }
-    
     const fixed = { ...opt, type };
-
     if (fixed.options && Array.isArray(fixed.options)) {
       fixed.options = fixOptions(fixed.options);
     }
-
     return fixed;
   });
 }
@@ -44,12 +41,10 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 (async () => {
   try {
     console.log(`Started refreshing ${payload.length} application (/) commands.`);
-
     const data = await rest.put(
       Routes.applicationCommands(process.env.CLIENT_ID),
       { body: payload }
     );
-
     console.log(`✅ Successfully reloaded ${data.length} application (/) commands.`);
   } catch (error) {
     console.error('Error deploying commands:', error);
