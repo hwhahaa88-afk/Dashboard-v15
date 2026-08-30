@@ -218,7 +218,7 @@ const commands = [
       return ctx.reply(r('🔊', `${member.user.username} has been kicked from the voice channel!`));
     },
   },
-    {
+  {
     name: 'vmove',
     description: 'Move a member to another voice channel | نقل عضو لروم صوتي آخر',
     permission: PermissionFlagsBits.MoveMembers,
@@ -236,6 +236,15 @@ const commands = [
         const invokerMember = await ctx.guild.members.fetch(ctx.invoker.id).catch(() => null);
         channel = invokerMember?.voice?.channel;
       }
+
+      if (!channel || !channel.isVoiceBased()) {
+        return ctx.reply(r('❌', 'You must specify a valid voice channel or be in one yourself.'));
+      }
+
+      await member.voice.setChannel(channel);
+      return ctx.reply(r('✅', '**' + (member.user.username || member.displayName) + '** has been moved to <#' + channel.id + '>!'));
+    },
+  },
 
       if (!channel || !channel.isVoiceBased()) {
         return ctx.reply(r('❌', 'You must specify a valid voice channel or be in one yourself.'));
