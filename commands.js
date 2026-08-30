@@ -565,12 +565,16 @@ const commands = [
       }
     },
   },
-    {
-    name: 'vmove',
-    description: 'Move a member to another voice channel | نقل عضو لروم صوتي آخر',
-    permission: PermissionFlagsBits.MoveMembers,
-    options: [
-      { name: 'user', type: 'user', required: true, description: 'The member to move' },
+
+      if (!channel || !channel.isVoiceBased()) {
+        return ctx.reply(r('❌', 'You must specify a valid voice channel or be in one yourself.'));
+      }
+
+      await member.voice.setChannel(channel);
+      return ctx.reply(r('✅', '**' + (member.user.username || member.displayName) + '** has been moved to <#' + channel.id + '>!'));
+    }
+  },
+{ name: 'user', type: 'user', required: true, description: 'The member to move' },
       { name: 'channel', type: 'channel', required: false, description: 'Target voice channel (optional)' }
     ],
     execute: async (ctx) => {
@@ -592,7 +596,12 @@ const commands = [
       return ctx.reply(r('✅', '**' + (member.user.username || member.displayName) + '** has been moved to <#' + channel.id + '>!'));
     }
   },
-{ name: 'user', type: 'user', required: true, description: 'The member to move' },
+  {
+    name: 'vmove',
+    description: 'Move a member to another voice channel | نقل عضو لروم صوتي آخر',
+    permission: PermissionFlagsBits.MoveMembers,
+    options: [
+      { name: 'user', type: 'user', required: true, description: 'The member to move' },
       { name: 'channel', type: 'channel', required: false, description: 'Target voice channel (optional)' }
     ],
     execute: async (ctx) => {
