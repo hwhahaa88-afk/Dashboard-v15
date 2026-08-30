@@ -2,14 +2,14 @@ const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "ban",
-  description: "Ban a member or user from the server | حظر عضو أو أيدي من السيرفر",
+  description: "Ban a user or member from the server | حظر عضو أو أيدي من السيرفر",
   permission: PermissionFlagsBits.BanMembers,
   options: [
     {
       name: "user",
-      type: 6, // USER type
+      type: 3, // String type to accept both Mention and direct ID
       required: true,
-      description: "User or ID to ban | العضو أو الأيدي المراد حظره"
+      description: "User ID or Mention to ban | أيدي أو منشن العضو المراد حظره"
     },
     {
       name: "time",
@@ -32,79 +32,64 @@ module.exports = {
   ],
   execute: async (ctx) => {
     try {
-      let userId = null;
-      let userObj = null;
-
-      // 1. استخراج المستخدم أو الأيدي من التفاعل بأكثر من طريقة لضمان التوافق
+      let rawInput = "";
+      
       if (ctx.interaction) {
-        userObj = ctx.interaction.options.getUser("user");
-        if (userObj) {
-          userId = userObj.id;
-        } else {
-          const rawOption = ctx.interaction.options.get("user");
-          if (rawOption && rawOption.value) userId = rawOption.value;
-        }
-      } else if (typeof ctx.getUserMember === "function") {
-        const member = await ctx.getUserMember("user").catch(() => null);
-        if (member) {
-          userObj = member.user;
-          userId = member.id;
-        }
+        rawInput = ctx.interaction.options.getString("user") || "";
+      } else if (typeof ctx.getString === "function") {
+        rawInput = ctx.getString("user") || "";
+      } else if (ctx.options && typeof ctx.options.get === "function") {
+        const opt = ctx.options.get("user");
+        if (opt) rawInput = String(opt.value);
       }
 
-      // إذا لم يتوفر بعد، نجرب القراءة المباشرة من الخيارات
-      if (!userId && ctx.options) {
-        if (typeof ctx.options.getUser === "function") {
-          userObj = ctx.options.getUser("user");
-          if (userObj) userId = userObj.id;
-        }
-        if (!userId && typeof ctx.getString === "function") {
-          const strVal = ctx.getString("user");
-          if (strVal) userId = strVal.replace(/[<@!>]/g, "").trim();
-        }
+      // استخراج الـ ID فقط بعد تنظيف أي منشن أو أقواس
+      const userId = rawInput.replace(/[<@!>]/g, "").trim();
+
+      if (!userId || isNaN(userId)) {
+        return ctx.reply("**❌ | Invalid User ID or Mention.**");
       }
 
-      if (!userId) {
-        return ctx.reply("**❌ | User not specified or invalid.**");
-      }
-
-      // 2. التحقق من صلاحية رتبة العضو إذا كان موجوداً بالسيرفر
+      // التحقق مما إذا كان العضو متواجد داخل السيرفر لمنع حظر من هم أعلى من البوت
       const member = await ctx.guild.members.fetch(userId).catch(() => null);
       if (member && !member.bannable) {
         return ctx.reply("**❌ | Cannot ban this member (Higher role or missing permissions).**");
       }
 
-      // 3. جلب معلومات الحساب من ديسكورد إن لم تكن متوفرة
-      if (!userObj) {
-        userObj = await ctx.client.users.fetch(userId).catch(() => null);
-      }
+      // جلب بيانات الحساب المباشرة من سيرفرات ديسكورد
+      const targetUser = await ctx.client.users.fetch(userId).catch(() => null);
 
-      // 4. معالجة خيارات الوقت والسبب والمسح
-      const reason = (typeof ctx.getString === "function" ? ctx.getString("reason") : null) || "No reason provided";
-      const time = typeof ctx.getString === "function" ? ctx.getString("time") : null;
+      let reason = "No reason provided";
+      let time = null;
       let bulk = false;
 
       if (ctx.interaction) {
+        reason = ctx.interaction.options.getString("reason") || reason;
+        time = ctx.interaction.options.getString("time") || null;
         bulk = ctx.interaction.options.getBoolean("bulk") || false;
-      } else if (ctx.options && typeof ctx.options.getBoolean === "function") {
-        bulk = ctx.options.getBoolean("bulk") || false;
+      } else if (typeof ctx.getString === "function") {
+        reason = ctx.getString("reason") || reason;
+        time = ctx.getString("time") || null;
+        if (ctx.options && typeof ctx.options.getBoolean === "function") {
+          bulk = ctx.options.getBoolean("bulk") || false;
+        }
       }
 
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      // 5. حظر الأيدي مباشرة من السيرفر
+      // حظر المستخدم عبر الأيدي
       await ctx.guild.members.ban(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
       });
 
-      const targetName = userObj ? `${userObj.username} (${userId})` : userId;
-      return ctx.reply(`**✅ | Successfully banned ${targetName}** ${time ? `for ${time}` : ""}`);
+      const displayName = targetUser ? `${targetUser.username} (${userId})` : userId;
+      return ctx.reply(`**✅ | Successfully banned ${displayName}** ${time ? `for ${time}` : ""}`);
 
     } catch (err) {
-      console.error("Ban Error:", err);
-      return ctx.reply("**❌ | Failed to ban user. Make sure the ID is valid and I have permissions.**");
+      console.error(err);
+      return ctx.reply("**❌ | Failed to ban user. Make sure the ID is correct and I have permissions.**");
     }
   }
 };
