@@ -5,7 +5,7 @@ function r(emoji, text) {
 }
 
 const commands = [
-    {
+  {
     name: "vmove",
     description: "Move a member to another voice channel | نقل عضو لروم صوتي آخر",
     permission: PermissionFlagsBits.MoveMembers,
@@ -22,11 +22,6 @@ const commands = [
       if (!channel || !channel.isVoiceBased()) {
         return ctx.reply(r("❌", "Please select a valid voice channel."));
       }
-
-      await member.voice.setChannel(channel);
-      return ctx.reply(r("✅", "**" + (member.user.username || member.displayName) + "** has been moved to <#" + channel.id + ">!"));
-    }
-  },
 
       await member.voice.setChannel(channel);
       return ctx.reply(r("✅", "**" + (member.user.username || member.displayName) + "** has been moved to <#" + channel.id + ">!"));
