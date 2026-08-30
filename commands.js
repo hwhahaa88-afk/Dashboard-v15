@@ -2,10 +2,11 @@ const { PermissionFlagsBits, ChannelType, EmbedBuilder } = require('discord.js')
 const { getWarnings, addWarning, removeWarning, clearWarnings, getPoints, addPoints } = require('./database');
 const { buildMainHelpEmbed, buildCategoryEmbed, buildCommandDetailEmbed, buildHelpSelectRow } = require('./helpHelper');
 
-// ProBot-style reply: "emoji | message"
-function r(emoji, text) { return `${emoji} | ${text}`; }
+// ProBot-style reply: "**emoji | message**"
+function r(emoji, text) { return `**${emoji} | ${text}**`; }
 
 function resolveChannelMention(guild, raw) {
+  if (!raw) return null;
   const id = raw.replace(/[<#>]/g, '');
   return guild.channels.cache.get(id) || null;
 }
@@ -147,22 +148,28 @@ const commands = [
       { name: 'time', type: 'string', required: false, description: 'Temporary ban duration, e.g. 1d, 12h (leave empty for permanent)' },
     ],
     execute: async (ctx) => {
+      const targetUser = ctx.getUser('user');
       const member = await ctx.getUserMember('user');
       const reason = ctx.getString('reason') || 'No reason provided';
       let bulk = ctx.getInteger('bulk') || 0;
       const time = ctx.getString('time');
-      if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!member.bannable) return ctx.reply(r('🙄', `You can't ban ${member.user.tag}.`));
+
+      if (!targetUser) return ctx.reply(r('❌', 'User not found.'));
+      const username = targetUser.username || targetUser.tag || 'User';
+
+      if (member && !member.bannable) return ctx.reply(r('🙄', `You can't ban ${username}.`));
       if (bulk < 0) bulk = 0;
       if (bulk > 7) bulk = 7;
       const ms = time ? parseDuration(time) : null;
       if (time && (!ms || ms <= 0)) return ctx.reply(r('❌', 'Invalid duration. Example: 1d, 12h, 30m'));
-      await member.ban({ reason, deleteMessageSeconds: bulk * 86400 });
-      if (ms) scheduleTempUnban(ctx.guild, member.id, ms);
-      let out = `${member.user.tag} has been banned from the server | ✈️`;
-      if (ms) out += `\n⏱️ Duration: ${time}`;
-      out += `\n📝 Reason: ${reason}`;
-      return ctx.reply(out);
+
+      await ctx.guild.members.ban(targetUser.id, { reason, deleteMessageSeconds: bulk * 86400 });
+      if (ms) scheduleTempUnban(ctx.guild, targetUser.id, ms);
+
+      let body = `${username} has been banned from the server`;
+      if (ms) body += `\n⏱️ Duration: ${time}`;
+      body += `\n📝 Reason: ${reason}`;
+      return ctx.reply(r('✈️', body));
     },
   },
   {
@@ -172,8 +179,13 @@ const commands = [
       const id = ctx.getString('user_id');
       if (!id) return ctx.reply(r('❌', 'You must provide a user ID.'));
       try {
+        let displayName = id;
+        try {
+          const fetchedUser = await ctx.raw.client.users.fetch(id);
+          if (fetchedUser) displayName = fetchedUser.username || fetchedUser.tag;
+        } catch { /* fall back to raw ID */ }
         await ctx.guild.bans.remove(id, 'Unbanned via command');
-        return ctx.reply(r('🔓', `User ${id} has been unbanned!`));
+        return ctx.reply(r('🔓', `${displayName} has been unbanned from the server!`));
       } catch { return ctx.reply(r('❌', 'No ban found for this ID.')); }
     },
   },
@@ -187,9 +199,9 @@ const commands = [
       const member = await ctx.getUserMember('user');
       const reason = ctx.getString('reason') || 'No reason provided';
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (!member.kickable) return ctx.reply(r('🙄', `You can't kick ${member.user.tag}.`));
+      if (!member.kickable) return ctx.reply(r('🙄', `You can't kick ${member.user.username}.`));
       await member.kick(reason);
-      return ctx.reply(r('👢', `${member.user.tag} has been kicked!\n📝 Reason: ${reason}`));
+      return ctx.reply(r('👢', `${member.user.username} has been kicked!\n📝 Reason: ${reason}`));
     },
   },
   {
@@ -203,23 +215,29 @@ const commands = [
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       if (!member.voice.channel) return ctx.reply(r('❌', 'Member is not in a voice channel.'));
       await member.voice.disconnect(ctx.getString('reason') || 'Voice kick via command');
-      return ctx.reply(r('🔊', `${member.user.tag} has been kicked from the voice channel!`));
+      return ctx.reply(r('🔊', `${member.user.username} has been kicked from the voice channel!`));
     },
   },
   {
     name: 'vmove', description: 'Move a member to another voice channel | نقل عضو لروم صوتي آخر', permission: PermissionFlagsBits.MoveMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to move' },
-      { name: 'channel', type: 'voice_channel', required: true, description: 'Target voice channel' },
+      { name: 'channel', type: 'voice_channel', required: false, description: 'Target voice channel (optional)' },
     ],
     execute: async (ctx) => {
       const member = await ctx.getUserMember('user');
-      const channel = ctx.getChannel('channel');
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       if (!member.voice.channel) return ctx.reply(r('❌', 'Member is not in a voice channel.'));
-      if (!channel || channel.type !== ChannelType.GuildVoice) return ctx.reply(r('❌', 'You must specify a valid voice channel.'));
+
+      let channel = ctx.getChannel('channel');
+      if (!channel || channel.type !== ChannelType.GuildVoice) {
+        const invokerMember = await ctx.guild.members.fetch(ctx.invoker.id).catch(() => null);
+        channel = invokerMember?.voice?.channel;
+      }
+      if (!channel) return ctx.reply(r('❌', 'You must specify a voice channel or be in one yourself.'));
+
       await member.voice.setChannel(channel);
-      return ctx.reply(r('🔀', `${member.user.tag} has been moved to #${channel.name}!`));
+      return ctx.reply(r('🔀', `${member.user.username} has been moved to #${channel.name}!`));
     },
   },
   {
@@ -237,7 +255,7 @@ const commands = [
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       if (!ms || ms <= 0 || ms > 28 * 86400000) return ctx.reply(r('❌', 'Invalid duration (max 28 days). Example: 10m, 2h, 1d'));
       await member.timeout(ms, reason);
-      return ctx.reply(r('⏱️', `${member.user.tag} has been timed out for ${durationRaw}!\n📝 Reason: ${reason}`));
+      return ctx.reply(r('⏱️', `${member.user.username} has been timed out for ${durationRaw}!\n📝 Reason: ${reason}`));
     },
   },
   {
@@ -247,11 +265,11 @@ const commands = [
       const member = await ctx.getUserMember('user');
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       await member.timeout(null);
-      return ctx.reply(r('✅', `${member.user.tag}'s timeout has been removed!`));
+      return ctx.reply(r('✅', `${member.user.username}'s timeout has been removed!`));
     },
   },
   {
-    name: 'mute', description: 'Mute a member for a duration (alias of timeout) | كتم عضو لمدة محددة', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'mute', description: 'Mute a member for a duration | كتم عضو لمدة محددة', permission: PermissionFlagsBits.ModerateMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member to mute' },
       { name: 'duration', type: 'string', required: true, description: 'Duration, e.g. 10m, 2h, 1d' },
@@ -265,17 +283,17 @@ const commands = [
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       if (!ms || ms <= 0 || ms > 28 * 86400000) return ctx.reply(r('❌', 'Invalid duration (max 28 days). Example: 10m, 2h, 1d'));
       await member.timeout(ms, reason);
-      return ctx.reply(r('🔇', `${member.user.tag} has been muted for ${durationRaw}!\n📝 Reason: ${reason}`));
+      return ctx.reply(r('🔇', `${member.user.username} has been muted for ${durationRaw}!\n📝 Reason: ${reason}`));
     },
   },
   {
-    name: 'unmute', description: 'Remove a mute from a member (alias of untimeout) | إلغاء الكتم', permission: PermissionFlagsBits.ModerateMembers,
+    name: 'unmute', description: 'Remove a mute from a member | إلغاء الكتم', permission: PermissionFlagsBits.ModerateMembers,
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await ctx.getUserMember('user');
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       await member.timeout(null);
-      return ctx.reply(r('🔊', `${member.user.tag} has been unmuted!`));
+      return ctx.reply(r('🔊', `${member.user.username} has been unmuted!`));
     },
   },
   {
@@ -290,7 +308,7 @@ const commands = [
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       const role = await ensureMutedRole(ctx.guild);
       await member.roles.add(role, reason);
-      return ctx.reply(r('🔇', `${member.user.tag} has been muted from text!\n📝 Reason: ${reason}`));
+      return ctx.reply(r('🔇', `${member.user.username} has been muted from text!\n📝 Reason: ${reason}`));
     },
   },
   {
@@ -301,7 +319,7 @@ const commands = [
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       const role = await ensureMutedRole(ctx.guild);
       await member.roles.remove(role);
-      return ctx.reply(r('🔊', `${member.user.tag} has been unmuted from text!`));
+      return ctx.reply(r('🔊', `${member.user.username} has been unmuted from text!`));
     },
   },
   {
@@ -315,7 +333,7 @@ const commands = [
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       if (!member.voice.channel) return ctx.reply(r('❌', 'Member is not in a voice channel.'));
       await member.voice.setMute(true, ctx.getString('reason') || 'Voice mute via command');
-      return ctx.reply(r('🔇', `${member.user.tag} has been muted from voice!`));
+      return ctx.reply(r('🔇', `${member.user.username} has been muted from voice!`));
     },
   },
   {
@@ -325,11 +343,11 @@ const commands = [
       const member = await ctx.getUserMember('user');
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       await member.voice.setMute(false, 'Voice unmute via command');
-      return ctx.reply(r('🔊', `${member.user.tag} has been unmuted from voice!`));
+      return ctx.reply(r('🔊', `${member.user.username} has been unmuted from voice!`));
     },
   },
   {
-    name: 'vmute', description: 'Server-mute a member in voice (alias of mutevoice) | كتم صوتي', permission: PermissionFlagsBits.MuteMembers,
+    name: 'vmute', description: 'Server-mute a member in voice | كتم صوتي', permission: PermissionFlagsBits.MuteMembers,
     options: [
       { name: 'user', type: 'user', required: true, description: 'The member' },
       { name: 'reason', type: 'string', required: false, consumeRest: true, description: 'Reason' },
@@ -339,17 +357,17 @@ const commands = [
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       if (!member.voice.channel) return ctx.reply(r('❌', 'Member is not in a voice channel.'));
       await member.voice.setMute(true, ctx.getString('reason') || 'Voice mute via command');
-      return ctx.reply(r('🔇', `${member.user.tag} has been muted from voice!`));
+      return ctx.reply(r('🔇', `${member.user.username} has been muted from voice!`));
     },
   },
   {
-    name: 'vunmute', description: 'Remove voice mute from a member (alias of unmutevoice) | إلغاء الكتم الصوتي', permission: PermissionFlagsBits.MuteMembers,
+    name: 'vunmute', description: 'Remove voice mute from a member | إلغاء الكتم الصوتي', permission: PermissionFlagsBits.MuteMembers,
     options: [{ name: 'user', type: 'user', required: true, description: 'The member' }],
     execute: async (ctx) => {
       const member = await ctx.getUserMember('user');
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       await member.voice.setMute(false, 'Voice unmute via command');
-      return ctx.reply(r('🔊', `${member.user.tag} has been unmuted from voice!`));
+      return ctx.reply(r('🔊', `${member.user.username} has been unmuted from voice!`));
     },
   },
   {
@@ -369,7 +387,7 @@ const commands = [
       const punishment = await applyWarnPunishment(ctx.guild, member);
       await sendWarnTranscript(ctx.guild, ctx.invoker.user.tag, member, reason, warning, punishment);
 
-      return ctx.reply(r('⚠️', `${member.user.tag} has been warned!`));
+      return ctx.reply(r('✅', `${member.user.username} has been warned!!`));
     },
   },
   {
@@ -384,7 +402,7 @@ const commands = [
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       const removed = removeWarning(ctx.guild.id, member.id, warnId);
       if (!removed) return ctx.reply(r('❌', 'No warning found with this ID.'));
-      return ctx.reply(r('✅', `Warning ${warnId} has been removed from ${member.user.tag}!`));
+      return ctx.reply(r('✅', `Warning ${warnId} has been removed from ${member.user.username}!`));
     },
   },
   {
@@ -394,9 +412,9 @@ const commands = [
       const member = await ctx.getUserMember('user');
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       const warns = getWarnings(ctx.guild.id, member.id);
-      if (!warns.length) return ctx.reply(r('✅', `${member.user.tag} has no warnings.`));
+      if (!warns.length) return ctx.reply(r('✅', `${member.user.username} has no warnings.`));
       const list = warns.map((w, i) => `${i + 1}. ${w.id} - ${w.reason} (by <@${w.moderator_id}>)`).join('\n');
-      return ctx.reply(r('⚠️', `Warnings — ${member.user.tag}\n${list}`));
+      return ctx.reply(r('⚠️', `Warnings — ${member.user.username}\n${list}`));
     },
   },
   {
@@ -406,8 +424,8 @@ const commands = [
       const member = await ctx.getUserMember('user');
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       const count = clearWarnings(ctx.guild.id, member.id);
-      if (!count) return ctx.reply(r('✅', `${member.user.tag} had no warnings to clear.`));
-      return ctx.reply(r('🧹', `Cleared ${count} warning(s) for ${member.user.tag}!`));
+      if (!count) return ctx.reply(r('✅', `${member.user.username} had no warnings to clear.`));
+      return ctx.reply(r('🧹', `Cleared ${count} warning(s) for ${member.user.username}!`));
     },
   },
   {
@@ -418,14 +436,16 @@ const commands = [
       if (!amount || amount < 1) return ctx.reply(r('❌', 'Enter a number between 1 and 100.'));
       if (amount > 100) amount = 100;
 
+      const clearText = (count) => `**Deleted \`${count}\` messages.**`;
+
       if (ctx.isSlash) {
-        await ctx.raw.deferReply({ ephemeral: true });
+        await ctx.raw.deferReply({ ephemeral: false });
         const deleted = await ctx.channel.bulkDelete(amount, true);
-        await ctx.raw.editReply(r('🧹', `Cleared ${deleted.size} messages!`));
+        await ctx.raw.editReply(clearText(deleted.size));
         setTimeout(() => ctx.raw.deleteReply().catch(() => {}), 1500);
       } else {
         const deleted = await ctx.channel.bulkDelete(amount, true);
-        const msg = await ctx.reply(r('🧹', `Cleared ${deleted.size} messages!`));
+        const msg = await ctx.reply(clearText(deleted.size));
         if (msg?.delete) setTimeout(() => msg.delete().catch(() => {}), 1500);
       }
     },
@@ -441,9 +461,9 @@ const commands = [
       const nickname = ctx.getString('nickname');
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       if (!nickname) return ctx.reply(r('❌', 'You must provide a nickname.'));
-      if (!member.manageable) return ctx.reply(r('🙄', `You can't edit ${member.user.tag}'s nickname.`));
+      if (!member.manageable) return ctx.reply(r('🙄', `You can't edit ${member.user.username}'s nickname.`));
       await member.setNickname(nickname);
-      return ctx.reply(r('🏷️', `${member.user.tag}'s nickname has been changed to ${nickname}!`));
+      return ctx.reply(r('🏷️', `${member.user.username}'s nickname has been changed to ${nickname}!`));
     },
   },
   {
@@ -458,9 +478,9 @@ const commands = [
       const member = await ctx.getUserMember('user');
       const amount = ctx.getInteger('amount') || 0;
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
-      if (action === 'add') return ctx.reply(r('✅', `Added ${Math.abs(amount)} points to ${member.user.tag}! Balance: ${addPoints(ctx.guild.id, member.id, Math.abs(amount))}`));
-      if (action === 'remove') return ctx.reply(r('✅', `Removed ${Math.abs(amount)} points from ${member.user.tag}! Balance: ${addPoints(ctx.guild.id, member.id, -Math.abs(amount))}`));
-      if (action === 'show') return ctx.reply(r('📊', `${member.user.tag}'s balance: ${getPoints(ctx.guild.id, member.id)} points.`));
+      if (action === 'add') return ctx.reply(r('✅', `Added ${Math.abs(amount)} points to ${member.user.username}! Balance: ${addPoints(ctx.guild.id, member.id, Math.abs(amount))}`));
+      if (action === 'remove') return ctx.reply(r('✅', `Removed ${Math.abs(amount)} points from ${member.user.username}! Balance: ${addPoints(ctx.guild.id, member.id, -Math.abs(amount))}`));
+      if (action === 'show') return ctx.reply(r('📊', `${member.user.username}'s balance: ${getPoints(ctx.guild.id, member.id)} points.`));
       return ctx.reply(r('❌', 'Invalid action, use: add / remove / show'));
     },
   },
@@ -495,10 +515,10 @@ const commands = [
       if (!role) return ctx.reply(r('❌', 'Role not found.'));
       if (member.roles.cache.has(role.id)) {
         await member.roles.remove(role);
-        return ctx.reply(r('✅', `Role ${role.name} has been removed from ${member.user.tag}!`));
+        return ctx.reply(r('✅', `Role ${role.name} has been removed from ${member.user.username}!`));
       }
       await member.roles.add(role);
-      return ctx.reply(r('✅', `Role ${role.name} has been added to ${member.user.tag}!`));
+      return ctx.reply(r('✅', `Role ${role.name} has been added to ${member.user.username}!`));
     },
   },
   {
@@ -512,9 +532,9 @@ const commands = [
       const role = ctx.getRole('role');
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       if (!role) return ctx.reply(r('❌', 'Role not found.'));
-      if (member.roles.cache.has(role.id)) return ctx.reply(r('🙄', `${member.user.tag} already has the role ${role.name}.`));
+      if (member.roles.cache.has(role.id)) return ctx.reply(r('🙄', `${member.user.username} already has the role ${role.name}.`));
       await member.roles.add(role);
-      return ctx.reply(r('✅', `Role ${role.name} has been added to ${member.user.tag}!`));
+      return ctx.reply(r('✅', `Role ${role.name} has been added to ${member.user.username}!`));
     },
   },
   {
@@ -528,9 +548,9 @@ const commands = [
       const role = ctx.getRole('role');
       if (!member) return ctx.reply(r('❌', 'Member not found.'));
       if (!role) return ctx.reply(r('❌', 'Role not found.'));
-      if (!member.roles.cache.has(role.id)) return ctx.reply(r('🙄', `${member.user.tag} doesn't have the role ${role.name}.`));
+      if (!member.roles.cache.has(role.id)) return ctx.reply(r('🙄', `${member.user.username} doesn't have the role ${role.name}.`));
       await member.roles.remove(role);
-      return ctx.reply(r('✅', `Role ${role.name} has been removed from ${member.user.tag}!`));
+      return ctx.reply(r('✅', `Role ${role.name} has been removed from ${member.user.username}!`));
     },
   },
   {
