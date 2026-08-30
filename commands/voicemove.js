@@ -2,12 +2,22 @@ const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "voicemove",
-  description: "Move member to voice channel | نقل عضو إلى روم صوتي",
+  description: "Move member in voice | نقل عضو صوتياً",
   permission: PermissionFlagsBits.MoveMembers,
   options: [
-    { name: "user", type: 6, required: true, description: "The member | العضو" },
-    { name: "channel", type: 7, required: false, description: "Voice channel | الروم الصوتي" }
-  ],
+    {
+        "name": "user",
+        "type": 6,
+        "required": true,
+        "description": "The member"
+    },
+    {
+        "name": "channel",
+        "type": 7,
+        "required": false,
+        "description": "Target channel"
+    }
+],
   execute: async (ctx) => {
     try {
       const member = await ctx.getUserMember("user");

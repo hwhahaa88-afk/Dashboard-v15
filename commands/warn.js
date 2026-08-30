@@ -2,12 +2,22 @@ const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "warn",
-  description: "Warn a member | إعطاء تحذير لعضو",
+  description: "Warn a member | تحذير عضو",
   permission: PermissionFlagsBits.ManageMessages,
   options: [
-    { name: "user", type: 6, required: true, description: "The member | العضو" },
-    { name: "reason", type: 3, required: false, description: "Reason | السبب" }
-  ],
+    {
+        "name": "user",
+        "type": 6,
+        "required": true,
+        "description": "The member"
+    },
+    {
+        "name": "reason",
+        "type": 3,
+        "required": false,
+        "description": "Reason"
+    }
+],
   execute: async (ctx) => {
     try {
       const member = await ctx.getUserMember("user");

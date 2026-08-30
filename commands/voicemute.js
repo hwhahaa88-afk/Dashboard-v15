@@ -2,11 +2,16 @@ const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "voicemute",
-  description: "Mute member in voice channel | ميوت صوتي لعضو",
+  description: "Mute member in voice | ميوت صوتي",
   permission: PermissionFlagsBits.MuteMembers,
   options: [
-    { name: "user", type: 6, required: true, description: "The member | العضو" }
-  ],
+    {
+        "name": "user",
+        "type": 6,
+        "required": true,
+        "description": "The member"
+    }
+],
   execute: async (ctx) => {
     try {
       const member = await ctx.getUserMember("user");
@@ -14,7 +19,7 @@ module.exports = {
       await member.voice.setMute(true);
       return ctx.reply("**✅ | Voice muted " + (member.user?.username || member.displayName) + "**");
     } catch (err) {
-      return ctx.reply("**❌ | Error voice muting member.**");
+      return ctx.reply("**❌ | Error voice muting.**");
     }
   }
 };

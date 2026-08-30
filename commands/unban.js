@@ -2,18 +2,23 @@ const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "unban",
-  description: "Unban a user by ID | فك الحظر بواسطة الـ ID",
+  description: "Unban user by ID | فك الحظر بالأيدي",
   permission: PermissionFlagsBits.BanMembers,
   options: [
-    { name: "userid", type: 3, required: true, description: "The user ID | أيدي العضو" }
-  ],
+    {
+        "name": "userid",
+        "type": 3,
+        "required": true,
+        "description": "User ID"
+    }
+],
   execute: async (ctx) => {
     try {
       const userId = ctx.getString("userid");
       await ctx.guild.bans.remove(userId);
-      return ctx.reply("**✅ | Successfully unbanned user ID: " + userId + "**");
+      return ctx.reply("**✅ | Unbanned ID: " + userId + "**");
     } catch (err) {
-      return ctx.reply("**❌ | Could not unban user ID.**");
+      return ctx.reply("**❌ | Could not unban user.**");
     }
   }
 };

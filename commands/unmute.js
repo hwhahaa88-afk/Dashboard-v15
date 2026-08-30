@@ -2,11 +2,16 @@ const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "unmute",
-  description: "Unmute a member | فك الميوت الكتابي عن عضو",
+  description: "Unmute a member | فك الميوت الكتابي",
   permission: PermissionFlagsBits.ModerateMembers,
   options: [
-    { name: "user", type: 6, required: true, description: "The member to unmute | العضو المراد فك كتمه" }
-  ],
+    {
+        "name": "user",
+        "type": 6,
+        "required": true,
+        "description": "The member to unmute"
+    }
+],
   execute: async (ctx) => {
     try {
       const member = await ctx.getUserMember("user");
