@@ -13,28 +13,45 @@ const commands = [
       { name: "user", type: "user", required: true, description: "The member to move" },
       { name: "channel", type: "channel", required: false, description: "Target voice channel (optional)" }
     ],
-    execute: async (ctx) => {
-      try {
-        const member = await ctx.getUserMember("user");
-        if (!member) return ctx.reply(r("❌", "Member not found."));
-        if (!member.voice || !member.voice.channel) return ctx.reply(r("❌", "Member is not in a voice channel."));
+    execute: async (interaction) => {
+      // الرد التمهيدي السريع لمنع ظهور The application did not respond
+      if (interaction.deferReply) {
+        await interaction.deferReply().catch(() => {});
+      }
 
-        let targetChannel = ctx.getChannel("channel");
+      try {
+        const targetUser = interaction.options?.getUser("user");
+        const channelOpt = interaction.options?.getChannel("channel");
+
+        if (!targetUser) {
+          const msg = r("❌", "Member not found.");
+          return interaction.editReply ? interaction.editReply(msg) : interaction.reply(msg);
+        }
+
+        const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+        if (!member || !member.voice || !member.voice.channel) {
+          const msg = r("❌", "Member is not in a voice channel.");
+          return interaction.editReply ? interaction.editReply(msg) : interaction.reply(msg);
+        }
+
+        let targetChannel = channelOpt;
         if (!targetChannel) {
-          const invokerId = ctx.invoker?.id || ctx.user?.id || ctx.author?.id;
-          const invokerMember = await ctx.guild.members.fetch(invokerId).catch(() => null);
+          const invokerMember = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
           targetChannel = invokerMember?.voice?.channel;
         }
 
         if (!targetChannel || !targetChannel.isVoiceBased()) {
-          return ctx.reply(r("❌", "Please specify a valid voice channel option or join a voice channel first."));
+          const msg = r("❌", "Please specify a valid voice channel option or join a voice channel first.");
+          return interaction.editReply ? interaction.editReply(msg) : interaction.reply(msg);
         }
 
         await member.voice.setChannel(targetChannel);
-        return ctx.reply(r("✅", "**" + (member.user?.username || member.displayName) + "** has been moved to <#" + targetChannel.id + ">!"));
+        const successMsg = r("✅", "**" + (member.user.username || member.displayName) + "** has been moved to <#" + targetChannel.id + ">!");
+        return interaction.editReply ? interaction.editReply(successMsg) : interaction.reply(successMsg);
       } catch (err) {
         console.error(err);
-        return ctx.reply(r("❌", "An error occurred while moving the member."));
+        const errorMsg = r("❌", "An error occurred while moving the member.");
+        return interaction.editReply ? interaction.editReply(errorMsg) : interaction.reply(errorMsg);
       }
     }
   }
