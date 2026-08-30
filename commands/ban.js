@@ -2,7 +2,7 @@ const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "ban",
-  description: "Ban a user by ID or mention | حظر شخص بالأيدي أو المنشن",
+  description: "Ban a user or member from the server | حظر عضو أو أيدي من السيرفر",
   permission: PermissionFlagsBits.BanMembers,
   options: [
     {
@@ -31,40 +31,69 @@ module.exports = {
     }
   ],
   execute: async (ctx) => {
-    const interaction = ctx.interaction || ctx;
-    if (interaction.deferReply) await interaction.deferReply().catch(() => {});
+    let interaction = ctx.interaction || (ctx.isInteraction ? ctx : null);
+
+    if (interaction && !interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
+    }
 
     try {
-      let raw = "";
-      if (interaction.options) {
-        raw = interaction.options.getString("user") || "";
+      let rawInput = "";
+      if (interaction) {
+        rawInput = interaction.options.getString("user") || "";
       } else if (typeof ctx.getString === "function") {
-        raw = ctx.getString("user") || "";
+        rawInput = ctx.getString("user") || "";
       }
 
-      const id = raw.replace(/[<@!>]/g, "").trim();
+      const userId = rawInput.replace(/[<@!>]/g, "").trim();
 
-      if (!id || isNaN(id)) {
-        const msg = "**❌ | الأيدي غير صحيح أو لم يتم إدخاله بشكل صحيح.**";
-        return interaction.editReply ? interaction.editReply(msg) : ctx.reply(msg);
+      if (!userId || isNaN(userId)) {
+        return sendReply(ctx, interaction, "**❌ | Invalid User ID or Mention.**");
       }
 
-      const reason = (interaction.options ? interaction.options.getString("reason") : null) || "No reason provided";
+      // جلب بيانات الحساب للحصول على اسم المستخدم (Username)
+      const targetUser = await ctx.client.users.fetch(userId).catch(() => null);
+      const username = targetUser ? targetUser.username : `<@${userId}>`;
 
-      await ctx.guild.bans.create(id, { reason });
+      const reason = (typeof ctx.getString === "function" ? ctx.getString("reason") : null) || "No reason provided";
+      const time = typeof ctx.getString === "function" ? ctx.getString("time") : null;
+      let bulk = interaction ? interaction.options.getBoolean("bulk") : false;
 
-      const successMsg = `**✅ | تم حظر الحساب بنجاح!**\n**الأيدي:** \`${id}\``;
-      return interaction.editReply ? interaction.editReply(successMsg) : ctx.reply(successMsg);
+      let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
+      let banReason = time ? `${reason} (Duration: ${time})` : reason;
+
+      await ctx.guild.bans.create(userId, {
+        reason: banReason,
+        deleteMessageSeconds: deleteMessageSeconds
+      });
+
+      // الرسالة بالتنسيق المطلوب
+      return sendReply(ctx, interaction, `**✈️ | ${username} has been banned from server**`);
 
     } catch (err) {
-      console.error(err);
-      let errMsg = `**❌ | خطأ أثناء الحظر (Code ${err.code || 'UNKNOWN'}): ${err.message}**`;
+      console.error("BAN ERROR:", err);
+
+      let errorMsg = `**❌ | Error Code ${err.code || 'UNKNOWN'}: ${err.message || "Failed to ban"}**`;
+
       if (err.code === 50013) {
-        errMsg = "**❌ | خطأ في الصلاحيات: ارفع رتبة البوت لتكون أعلى رتبة في السيرفر (Server Settings > Roles).**";
+        errorMsg = "**❌ | Missing Permissions: Make sure my bot role is HIGHER than the person you are banning!**";
       } else if (err.code === 10013) {
-        errMsg = "**❌ | هذا الأيدي غير موجود في ديسكورد.**";
+        errorMsg = "**❌ | Unknown User: Invalid Discord ID.**";
       }
-      return interaction.editReply ? interaction.editReply(errMsg) : ctx.reply(errMsg);
+
+      return sendReply(ctx, interaction, errorMsg);
     }
   }
 };
+
+async function sendReply(ctx, interaction, content) {
+  if (interaction) {
+    if (interaction.deferred || interaction.replied) {
+      return interaction.editReply({ content }).catch(() => {});
+    }
+    return interaction.reply({ content }).catch(() => {});
+  }
+  if (typeof ctx.reply === "function") {
+    return ctx.reply(content).catch(() => {});
+  }
+}
