@@ -4,7 +4,7 @@ function r(emoji, text) {
   return `${emoji} | ${text}`;
 }
 
-const commands = [
+const commandsList = [
   {
     name: "vmove",
     description: "Move a member to another voice channel | نقل عضو لروم صوتي آخر",
@@ -40,4 +40,5 @@ const commands = [
   }
 ];
 
-module.exports = commands;
+module.exports = commandsList;
+module.exports.commands = commandsList;
