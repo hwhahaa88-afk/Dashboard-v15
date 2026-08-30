@@ -51,9 +51,16 @@ module.exports = {
         return sendReply(ctx, interaction, "**❌ | Invalid User ID or Mention.**");
       }
 
-      // جلب بيانات الحساب للحصول على اسم المستخدم (Username)
-      const targetUser = await ctx.client.users.fetch(userId).catch(() => null);
-      const username = targetUser ? targetUser.username : `<@${userId}>`;
+      // الحصول على client بطريقة آمنة بدون الوقوع في خطأ undefined
+      const client = ctx.client || (interaction ? interaction.client : null) || (ctx.guild ? ctx.guild.client : null);
+
+      let username = userId;
+      if (client && client.users) {
+        const targetUser = await client.users.fetch(userId).catch(() => null);
+        if (targetUser) {
+          username = targetUser.username;
+        }
+      }
 
       const reason = (typeof ctx.getString === "function" ? ctx.getString("reason") : null) || "No reason provided";
       const time = typeof ctx.getString === "function" ? ctx.getString("time") : null;
@@ -67,7 +74,7 @@ module.exports = {
         deleteMessageSeconds: deleteMessageSeconds
       });
 
-      // الرسالة بالتنسيق المطلوب
+      // الرسالة المطلوبة
       return sendReply(ctx, interaction, `**✈️ | ${username} has been banned from server**`);
 
     } catch (err) {
