@@ -7,9 +7,9 @@ module.exports = {
   options: [
     {
       name: "user",
-      type: 3, // String type to accept both Mention and direct ID
+      type: 3, // STRING لضمان قبول كتابة الأيدي مباشرة لمن هم خارج السيرفر
       required: true,
-      description: "User ID or Mention to ban | أيدي أو منشن العضو المراد حظره"
+      description: "User ID or Mention | ضع أيدي الشخص أو المنشن"
     },
     {
       name: "time",
@@ -31,7 +31,6 @@ module.exports = {
     }
   ],
   execute: async (ctx) => {
-    // الرد المبدئي السريع لتجنب خطأ عدم استجابة التطبيق
     if (ctx.interaction && !ctx.interaction.deferred && !ctx.interaction.replied) {
       await ctx.interaction.deferReply().catch(() => {});
     }
@@ -43,58 +42,38 @@ module.exports = {
         rawInput = ctx.interaction.options.getString("user") || "";
       } else if (typeof ctx.getString === "function") {
         rawInput = ctx.getString("user") || "";
-      } else if (ctx.options && typeof ctx.options.get === "function") {
-        const opt = ctx.options.get("user");
-        if (opt) rawInput = String(opt.value);
       }
 
-      // استخراج الـ ID فقط بعد تنظيف المنشن والأقواس
+      // استخراج الـ ID المباشر من النص المدخل
       const userId = rawInput.replace(/[<@!>]/g, "").trim();
 
       if (!userId || isNaN(userId)) {
         return sendResponse(ctx, "**❌ | Invalid User ID or Mention.**");
       }
 
-      // التحقق من وجود العضو داخل السيرفر لمعرفة صلاحيات حظره
-      const member = await ctx.guild.members.fetch(userId).catch(() => null);
-      if (member && !member.bannable) {
-        return sendResponse(ctx, "**❌ | Cannot ban this member (Higher role or missing permissions).**");
-      }
-
-      // جلب بيانات الحساب مباشرة من ديسكورد حتى لو كان خارج السيرفر
-      const targetUser = await ctx.client.users.fetch(userId).catch(() => null);
-
-      let reason = "No reason provided";
-      let time = null;
-      let bulk = false;
-
-      if (ctx.interaction) {
-        reason = ctx.interaction.options.getString("reason") || reason;
-        time = ctx.interaction.options.getString("time") || null;
-        bulk = ctx.interaction.options.getBoolean("bulk") || false;
-      } else if (typeof ctx.getString === "function") {
-        reason = ctx.getString("reason") || reason;
-        time = ctx.getString("time") || null;
-        if (ctx.options && typeof ctx.options.getBoolean === "function") {
-          bulk = ctx.options.getBoolean("bulk") || false;
-        }
-      }
+      const reason = (typeof ctx.getString === "function" ? ctx.getString("reason") : null) || "No reason provided";
+      const time = typeof ctx.getString === "function" ? ctx.getString("time") : null;
+      let bulk = ctx.interaction ? ctx.interaction.options.getBoolean("bulk") : false;
 
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      // حظر المستخدم عبر الأيدي
-      await ctx.guild.members.ban(userId, {
+      // تنفيذ الحظر المباشر من خوادم ديسكورد عبر الأيدي
+      await ctx.guild.bans.create(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
       });
 
-      const displayName = targetUser ? `${targetUser.username} (${userId})` : userId;
-      return sendResponse(ctx, `**✅ | Successfully banned ${displayName}** ${time ? `for ${time}` : ""}`);
+      return sendResponse(ctx, `**✅ | Successfully banned <@${userId}> (${userId})** ${time ? `for ${time}` : ""}`);
 
     } catch (err) {
-      console.error("Ban Command Error:", err);
-      return sendResponse(ctx, "**❌ | Failed to ban user. Make sure the ID is correct and I have permissions.**");
+      console.error("BAN ERROR:", err);
+      if (err.code === 50013) {
+        return sendResponse(ctx, "**❌ | Missing Permissions: Place my role HIGHER than the user's role!**");
+      } else if (err.code === 10013) {
+        return sendResponse(ctx, "**❌ | Unknown User: Invalid Discord ID.**");
+      }
+      return sendResponse(ctx, `**❌ | Failed to ban: ${err.message || "Unknown error"}**`);
     }
   }
 };
