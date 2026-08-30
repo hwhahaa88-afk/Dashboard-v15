@@ -48,7 +48,7 @@ client.on('interactionCreate', async (interaction) => {
     } catch (err) {
       console.error(err);
       if (!interaction.replied) {
-        await interaction.reply({ content: '❌ حدث خطأ أثناء تنفيذ الأمر.', ephemeral: true }).catch(() => null);
+        await interaction.reply({ content: '❌ حدث خطأ أثناء تنفيذ الأمر.', ephemeral: false }).catch(() => null);
       }
     }
   }
