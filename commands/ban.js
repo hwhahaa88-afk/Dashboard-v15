@@ -7,9 +7,9 @@ module.exports = {
   options: [
     {
       name: "user",
-      type: 3, // STRING لتثبيت قبول الـ ID أو المنشن لمن خارج السيرفر
+      type: 6, // USER Type (Mentions & Pickers)
       required: true,
-      description: "User ID or Mention to ban | أيدي أو منشن الشخص المراد حظره"
+      description: "Select user or enter User ID | اختر العضو أو ضع الأيدي"
     },
     {
       name: "time",
@@ -32,42 +32,59 @@ module.exports = {
   ],
   execute: async (ctx) => {
     try {
-      const input = ctx.getString("user");
-      const reason = ctx.getString("reason") || "No reason provided";
-      const time = ctx.getString("time");
-      const bulk = ctx.options?.getBoolean("bulk");
+      // الحصول على خيار المستخدم الممرر أو الأيدي
+      let userObj = null;
+      let userId = null;
 
-      // استخراج الـ ID فقط سواء كتب أيدي أو سحب منشن <@12345>
-      const userId = input.replace(/[<@!>]/g, "").trim();
-
-      if (!userId || isNaN(userId)) {
-        return ctx.reply("**❌ | Invalid User ID or Mention.**");
+      if (ctx.interaction) {
+        userObj = ctx.interaction.options.getUser("user");
+        userId = userObj ? userObj.id : ctx.interaction.options.getString("user");
+      } else if (ctx.options) {
+        if (typeof ctx.options.getUser === "function") {
+          userObj = ctx.options.getUser("user");
+        }
+        if (userObj) {
+          userId = userObj.id;
+        } else {
+          const raw = ctx.getString ? ctx.getString("user") : null;
+          if (raw) userId = raw.replace(/[<@!>]/g, "").trim();
+        }
       }
 
-      // التحقق من وجود العضو داخل السيرفر لمعرفة صلاحيات حظره
+      if (!userId) {
+        return ctx.reply("**❌ | User not specified or invalid.**");
+      }
+
+      // جلب بيانات العضو من السيرفر إن وجد للتحقق من الرتب
       const member = await ctx.guild.members.fetch(userId).catch(() => null);
       if (member && !member.bannable) {
         return ctx.reply("**❌ | Cannot ban this member (Higher role or missing permissions).**");
       }
 
-      // جلب بيانات الحساب من ديسكورد مباشرة حتى لو كان خارج السيرفر
-      const targetUser = await ctx.client.users.fetch(userId).catch(() => null);
-      if (!targetUser) {
-        return ctx.reply("**❌ | User not found on Discord.**");
+      // جلب بيانات الحساب مباشرة من ديسكورد للحظر خارج السيرفر
+      if (!userObj) {
+        userObj = await ctx.client.users.fetch(userId).catch(() => null);
       }
+
+      const reason = ctx.getString ? ctx.getString("reason") || "No reason provided" : "No reason provided";
+      const time = ctx.getString ? ctx.getString("time") : null;
+      const bulk = ctx.options?.getBoolean ? ctx.options.getBoolean("bulk") : false;
 
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      await ctx.guild.members.ban(targetUser.id, {
+      // حظر المستخدم عبر الأيدي مباشرة
+      await ctx.guild.members.ban(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
       });
 
-      return ctx.reply(`**✅ | Successfully banned ${targetUser.tag || targetUser.username} (${targetUser.id})** ${time ? `for ${time}` : ""}`);
+      const nameDisplay = userObj ? `${userObj.tag || userObj.username} (${userId})` : userId;
+      return ctx.reply(`**✅ | Successfully banned ${nameDisplay}** ${time ? `for ${time}` : ""}`);
+
     } catch (err) {
-      console.error(err);
-      return ctx.reply("**❌ | Failed to ban user. Make sure the ID is correct and I have permissions.**");
+      console.error("Ban Command Error:", err);
+      return ctx.reply("**❌ | Could not ban this user. Check if the ID is valid and bot permissions.**");
     }
   }
 };
