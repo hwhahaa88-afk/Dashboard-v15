@@ -618,6 +618,16 @@ const commands = [
       return ctx.reply(r('✅', '**' + (member.user.username || member.displayName) + '** has been moved to <#' + channel.id + '>!'));
     }
   },
+  
+
+      if (!channel || !channel.isVoiceBased()) {
+        return ctx.reply(r("❌", "You must specify a valid voice channel or be in one yourself."));
+      }
+
+      await member.voice.setChannel(channel);
+      return ctx.reply(r("✅", "**" + (member.user.username || member.displayName) + "** has been moved to <#" + channel.id + ">!"));
+    }
+  },
   {
     name: "vmove",
     description: "Move a member to another voice channel | نقل عضو لروم صوتي آخر",
