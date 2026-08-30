@@ -7,7 +7,7 @@ module.exports = {
   options: [
     {
       name: "user",
-      type: 3,
+      type: 3, // String type لتفادي مشاكل التحقق من العضو الخارجي
       required: true,
       description: "User ID or Mention to ban | أيدي أو منشن العضو المراد حظره"
     },
@@ -45,6 +45,7 @@ module.exports = {
         rawInput = ctx.getString("user") || "";
       }
 
+      // استخراج الـ ID فقط بعد مسح الأقواس والمنشن
       const userId = rawInput.replace(/[<@!>]/g, "").trim();
 
       if (!userId || isNaN(userId)) {
@@ -58,7 +59,7 @@ module.exports = {
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      // تنفيذ الحظر المباشر عبر GuildBansManager
+      // تنفيذ الحظر المباشر عن طريق أيدي الحساب
       await ctx.guild.bans.create(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
@@ -72,7 +73,7 @@ module.exports = {
       let errorMsg = `**❌ | Error Code ${err.code || 'UNKNOWN'}: ${err.message || "Failed to ban"}**`;
 
       if (err.code === 50013) {
-        errorMsg = "**❌ | Missing Permissions: Make sure my bot role is HIGHER than the person you are banning and has 'Ban Members' permission!**";
+        errorMsg = "**❌ | Missing Permissions: Make sure my bot role is HIGHER than the person you are banning!**";
       } else if (err.code === 10013) {
         errorMsg = "**❌ | Unknown User: Invalid Discord ID.**";
       }
