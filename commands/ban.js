@@ -31,6 +31,11 @@ module.exports = {
     }
   ],
   execute: async (ctx) => {
+    // الرد المبدئي السريع لتجنب خطأ عدم استجابة التطبيق
+    if (ctx.interaction && !ctx.interaction.deferred && !ctx.interaction.replied) {
+      await ctx.interaction.deferReply().catch(() => {});
+    }
+
     try {
       let rawInput = "";
       
@@ -43,20 +48,20 @@ module.exports = {
         if (opt) rawInput = String(opt.value);
       }
 
-      // استخراج الـ ID فقط بعد تنظيف أي منشن أو أقواس
+      // استخراج الـ ID فقط بعد تنظيف المنشن والأقواس
       const userId = rawInput.replace(/[<@!>]/g, "").trim();
 
       if (!userId || isNaN(userId)) {
-        return ctx.reply("**❌ | Invalid User ID or Mention.**");
+        return sendResponse(ctx, "**❌ | Invalid User ID or Mention.**");
       }
 
-      // التحقق مما إذا كان العضو متواجد داخل السيرفر لمنع حظر من هم أعلى من البوت
+      // التحقق من وجود العضو داخل السيرفر لمعرفة صلاحيات حظره
       const member = await ctx.guild.members.fetch(userId).catch(() => null);
       if (member && !member.bannable) {
-        return ctx.reply("**❌ | Cannot ban this member (Higher role or missing permissions).**");
+        return sendResponse(ctx, "**❌ | Cannot ban this member (Higher role or missing permissions).**");
       }
 
-      // جلب بيانات الحساب المباشرة من سيرفرات ديسكورد
+      // جلب بيانات الحساب مباشرة من ديسكورد حتى لو كان خارج السيرفر
       const targetUser = await ctx.client.users.fetch(userId).catch(() => null);
 
       let reason = "No reason provided";
@@ -85,11 +90,21 @@ module.exports = {
       });
 
       const displayName = targetUser ? `${targetUser.username} (${userId})` : userId;
-      return ctx.reply(`**✅ | Successfully banned ${displayName}** ${time ? `for ${time}` : ""}`);
+      return sendResponse(ctx, `**✅ | Successfully banned ${displayName}** ${time ? `for ${time}` : ""}`);
 
     } catch (err) {
-      console.error(err);
-      return ctx.reply("**❌ | Failed to ban user. Make sure the ID is correct and I have permissions.**");
+      console.error("Ban Command Error:", err);
+      return sendResponse(ctx, "**❌ | Failed to ban user. Make sure the ID is correct and I have permissions.**");
     }
   }
 };
+
+async function sendResponse(ctx, content) {
+  if (ctx.interaction) {
+    if (ctx.interaction.deferred || ctx.interaction.replied) {
+      return ctx.interaction.editReply({ content }).catch(() => {});
+    }
+    return ctx.interaction.reply({ content }).catch(() => {});
+  }
+  return ctx.reply(content);
+}
