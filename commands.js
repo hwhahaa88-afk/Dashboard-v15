@@ -218,7 +218,7 @@ const commands = [
       return ctx.reply(r('🔊', `${member.user.username} has been kicked from the voice channel!`));
     },
   },
-    {
+      {
     name: 'vmove',
     description: 'Move a member to another voice channel | نقل عضو لروم صوتي آخر',
     permission: PermissionFlagsBits.MoveMembers,
@@ -244,6 +244,7 @@ const commands = [
       await member.voice.setChannel(channel);
       return ctx.reply(r('✅', '**' + (member.user.username || member.displayName) + '** has been moved to <#' + channel.id + '>!'));
     },
+  },
   },{ name: 'channel', type: 'channel', required: false, description: 'Target voice channel (optional)' },
     ],
     execute: async (ctx) => {
