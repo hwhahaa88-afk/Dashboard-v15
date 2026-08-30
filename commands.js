@@ -218,7 +218,7 @@ const commands = [
       return ctx.reply(r('🔊', `${member.user.username} has been kicked from the voice channel!`));
     },
   },
-      {
+  {
     name: 'vmove',
     description: 'Move a member to another voice channel | نقل عضو لروم صوتي آخر',
     permission: PermissionFlagsBits.MoveMembers,
