@@ -58,15 +58,21 @@ module.exports = {
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      // حظر المستخدم
-      const bannedUser = await ctx.guild.bans.create(userId, {
+      // تنفيذ الحظر وآخذ كائن الحظر المرجوع
+      const banResult = await ctx.guild.bans.create(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
       });
 
-      // استخراج اسم المستخدم إذا كان متوفراً وإلا استخدام المنشن/الأيدي
-      const username = bannedUser && bannedUser.username ? bannedUser.username : (bannedUser && bannedUser.user ? bannedUser.user.username : `<@${userId}>`);
+      // استخراج اسم المستخدم بأمان بدون أي خطأ
+      let username = `<@${userId}>`;
+      if (banResult && banResult.user && banResult.user.username) {
+        username = banResult.user.username;
+      } else if (banResult && banResult.username) {
+        username = banResult.username;
+      }
 
+      // إرسال الرسالة بالتنسيق المطلوب
       return sendReply(ctx, interaction, `**✈️ | ${username} has been banned from server**`);
 
     } catch (err) {
