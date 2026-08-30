@@ -1,30 +1,19 @@
-const { PermissionFlagsBits } = require("discord.js");
+const fs = require("fs");
+const path = require("path");
 
-function r(emoji, text) {
-  return `**${emoji} | ${text}**`;
-}
+const commandsList = [];
+const commandsDir = path.join(__dirname, "commands");
 
-const commandsList = [
-  {
-    "name": "vmove",
-    "description": "Move a member to another voice channel | نقل عضو لروم صوتي آخر",
-    "permission": "MoveMembers",
-    "options": [
-      {
-        "name": "user",
-        "type": "user",
-        "required": true,
-        "description": "The member to move"
-      },
-      {
-        "name": "channel",
-        "type": "channel",
-        "required": false,
-        "description": "Target voice channel (optional)"
-      }
-    ]
+if (fs.existsSync(commandsDir)) {
+  const files = fs.readdirSync(commandsDir).filter(file => file.endsWith(".js"));
+  for (const file of files) {
+    delete require.cache[require.resolve(path.join(commandsDir, file))];
+    const cmd = require(path.join(commandsDir, file));
+    if (cmd && cmd.name) {
+      commandsList.push(cmd);
+    }
   }
-];
+}
 
 module.exports = commandsList;
 module.exports.commands = commandsList;
