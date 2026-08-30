@@ -7,9 +7,9 @@ module.exports = {
   options: [
     {
       name: "user",
-      type: 3, // STRING لضمان قبول كتابة الأيدي مباشرة لمن هم خارج السيرفر
+      type: 3,
       required: true,
-      description: "User ID or Mention | ضع أيدي الشخص أو المنشن"
+      description: "User ID or Mention to ban | أيدي أو منشن العضو المراد حظره"
     },
     {
       name: "time",
@@ -31,59 +31,65 @@ module.exports = {
     }
   ],
   execute: async (ctx) => {
-    if (ctx.interaction && !ctx.interaction.deferred && !ctx.interaction.replied) {
-      await ctx.interaction.deferReply().catch(() => {});
+    let interaction = ctx.interaction || (ctx.isInteraction ? ctx : null);
+
+    if (interaction && !interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
     }
 
     try {
       let rawInput = "";
-      
-      if (ctx.interaction) {
-        rawInput = ctx.interaction.options.getString("user") || "";
+      if (interaction) {
+        rawInput = interaction.options.getString("user") || "";
       } else if (typeof ctx.getString === "function") {
         rawInput = ctx.getString("user") || "";
       }
 
-      // استخراج الـ ID المباشر من النص المدخل
       const userId = rawInput.replace(/[<@!>]/g, "").trim();
 
       if (!userId || isNaN(userId)) {
-        return sendResponse(ctx, "**❌ | Invalid User ID or Mention.**");
+        return sendReply(ctx, interaction, "**❌ | Invalid User ID or Mention.**");
       }
 
       const reason = (typeof ctx.getString === "function" ? ctx.getString("reason") : null) || "No reason provided";
       const time = typeof ctx.getString === "function" ? ctx.getString("time") : null;
-      let bulk = ctx.interaction ? ctx.interaction.options.getBoolean("bulk") : false;
+      let bulk = interaction ? interaction.options.getBoolean("bulk") : false;
 
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      // تنفيذ الحظر المباشر من خوادم ديسكورد عبر الأيدي
+      // تنفيذ الحظر المباشر عبر GuildBansManager
       await ctx.guild.bans.create(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
       });
 
-      return sendResponse(ctx, `**✅ | Successfully banned <@${userId}> (${userId})** ${time ? `for ${time}` : ""}`);
+      return sendReply(ctx, interaction, `**✅ | Successfully banned <@${userId}> (${userId})** ${time ? `for ${time}` : ""}`);
 
     } catch (err) {
-      console.error("BAN ERROR:", err);
+      console.error("EXACT BAN ERROR:", err);
+
+      let errorMsg = `**❌ | Error Code ${err.code || 'UNKNOWN'}: ${err.message || "Failed to ban"}**`;
+
       if (err.code === 50013) {
-        return sendResponse(ctx, "**❌ | Missing Permissions: Place my role HIGHER than the user's role!**");
+        errorMsg = "**❌ | Missing Permissions: Make sure my bot role is HIGHER than the person you are banning and has 'Ban Members' permission!**";
       } else if (err.code === 10013) {
-        return sendResponse(ctx, "**❌ | Unknown User: Invalid Discord ID.**");
+        errorMsg = "**❌ | Unknown User: Invalid Discord ID.**";
       }
-      return sendResponse(ctx, `**❌ | Failed to ban: ${err.message || "Unknown error"}**`);
+
+      return sendReply(ctx, interaction, errorMsg);
     }
   }
 };
 
-async function sendResponse(ctx, content) {
-  if (ctx.interaction) {
-    if (ctx.interaction.deferred || ctx.interaction.replied) {
-      return ctx.interaction.editReply({ content }).catch(() => {});
+async function sendReply(ctx, interaction, content) {
+  if (interaction) {
+    if (interaction.deferred || interaction.replied) {
+      return interaction.editReply({ content }).catch(() => {});
     }
-    return ctx.interaction.reply({ content }).catch(() => {});
+    return interaction.reply({ content }).catch(() => {});
   }
-  return ctx.reply(content);
+  if (typeof ctx.reply === "function") {
+    return ctx.reply(content).catch(() => {});
+  }
 }
