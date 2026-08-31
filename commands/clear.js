@@ -13,9 +13,6 @@ module.exports = {
     }
   ],
   execute: async (ctx) => {
-    // طباعة الكائن في الـ Console لمعرفة مكان القيمة بدقة
-    console.log("CTX structure:", JSON.stringify(ctx, (key, value) => typeof value === 'bigint' ? value.toString() : value, 2));
-
     let interaction = ctx.interaction || (ctx.isInteraction && ctx.isInteraction() ? ctx : null);
 
     if (interaction && !interaction.deferred && !interaction.replied) {
@@ -25,13 +22,22 @@ module.exports = {
     try {
       let amount = null;
 
-      // محاولة استخراج القيمة من كافة الأماكن المحتملة
+      // 1. محاولة استخراج الرقم مباشرة من interaction.options.data أو الطرق المباشرة
       if (interaction && interaction.options) {
-        amount = interaction.options.getInteger?.("amount") ?? 
-                 interaction.options.getNumber?.("amount") ?? 
-                 interaction.options.get?.("amount")?.value;
+        if (typeof interaction.options.getInteger === "function") {
+          amount = interaction.options.getInteger("amount");
+        }
+        if (!amount && interaction.options.data && interaction.options.data.length > 0) {
+          const opt = interaction.options.data.find(o => o.name === "amount");
+          if (opt) amount = opt.value;
+        }
+        if (!amount && interaction.options._hoistedOptions && interaction.options._hoistedOptions.length > 0) {
+          const opt = interaction.options._hoistedOptions.find(o => o.name === "amount");
+          if (opt) amount = opt.value;
+        }
       }
 
+      // 2. محاولة استخراج من ctx مباشرة
       if (!amount && ctx.options) {
         if (typeof ctx.options.getInteger === "function") {
           amount = ctx.options.getInteger("amount");
@@ -39,14 +45,14 @@ module.exports = {
           const opt = ctx.options.find(o => o.name === "amount");
           if (opt) amount = opt.value;
         } else if (typeof ctx.options === "object") {
-          amount = ctx.options.amount || ctx.options._hoistedOptions?.[0]?.value;
+          amount = ctx.options.amount || ctx.options.value;
         }
       }
 
+      // 3. محاولة استخراج من ctx.args أو ctx.params
       if (!amount && ctx.args && ctx.args[0]) {
         amount = parseInt(ctx.args[0]);
       }
-
       if (!amount && ctx.params && ctx.params.amount) {
         amount = parseInt(ctx.params.amount);
       }
@@ -69,13 +75,10 @@ module.exports = {
       }
 
       const deletedCount = deleted.size;
-
-      // تلوين الرقم بالأخضر داخل التنسيق
       const colorResponse = `\`\`\`json\n"${deletedCount}" messages have been deleted.\n\`\`\``;
 
       await sendReply(ctx, interaction, colorResponse);
 
-      // حذف رسالة البوت بعد 1.5 ثانية
       setTimeout(async () => {
         if (interaction) {
           await interaction.deleteReply().catch(() => {});
