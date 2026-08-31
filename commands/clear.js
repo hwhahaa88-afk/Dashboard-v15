@@ -22,49 +22,42 @@ module.exports = {
     try {
       let amount = null;
 
-      // 1. محاولة استخراج الرقم مباشرة من interaction.options.data أو الطرق المباشرة
+      // 1. قراءة أي مدخل رقمي تم تمريره في خيارات الـ interaction بغض النظر عن المسمى
       if (interaction && interaction.options) {
         if (typeof interaction.options.getInteger === "function") {
           amount = interaction.options.getInteger("amount");
         }
+        
+        // إذا لم يجده بالاسم، يبحث في أول خيار مُدخل مهما كان اسمه
         if (!amount && interaction.options.data && interaction.options.data.length > 0) {
-          const opt = interaction.options.data.find(o => o.name === "amount");
-          if (opt) amount = opt.value;
+          amount = parseInt(interaction.options.data[0].value);
         }
+        
         if (!amount && interaction.options._hoistedOptions && interaction.options._hoistedOptions.length > 0) {
-          const opt = interaction.options._hoistedOptions.find(o => o.name === "amount");
-          if (opt) amount = opt.value;
+          amount = parseInt(interaction.options._hoistedOptions[0].value);
         }
       }
 
-      // 2. محاولة استخراج من ctx مباشرة
-      if (!amount && ctx.options) {
-        if (typeof ctx.options.getInteger === "function") {
-          amount = ctx.options.getInteger("amount");
-        } else if (Array.isArray(ctx.options)) {
-          const opt = ctx.options.find(o => o.name === "amount");
-          if (opt) amount = opt.value;
-        } else if (typeof ctx.options === "object") {
-          amount = ctx.options.amount || ctx.options.value;
-        }
-      }
-
-      // 3. محاولة استخراج من ctx.args أو ctx.params
+      // 2. إذا كان الأمر عبر الرسائل العادية أو عبر ctx
       if (!amount && ctx.args && ctx.args[0]) {
         amount = parseInt(ctx.args[0]);
       }
-      if (!amount && ctx.params && ctx.params.amount) {
-        amount = parseInt(ctx.params.amount);
+
+      if (!amount && ctx.options) {
+        if (Array.isArray(ctx.options) && ctx.options.length > 0) {
+          amount = parseInt(ctx.options[0].value || ctx.options[0]);
+        } else if (typeof ctx.options === "object") {
+          const firstVal = Object.values(ctx.options)[0];
+          amount = parseInt(firstVal);
+        }
       }
 
-      if (typeof amount === "string") {
-        amount = parseInt(amount);
-      }
-
+      // التحقق من صحة الرقم
       if (!amount || isNaN(amount) || amount < 1 || amount > 100) {
         return sendReply(ctx, interaction, "❌ | Please specify a number between 1 and 100.");
       }
 
+      // تنفيذ عملية الحذف
       const deleted = await ctx.channel.bulkDelete(amount, true).catch((e) => {
         console.error("BulkDelete Error:", e);
         return null;
@@ -75,10 +68,13 @@ module.exports = {
       }
 
       const deletedCount = deleted.size;
+
+      // تلوين الرقم داخل مربع النص
       const colorResponse = `\`\`\`json\n"${deletedCount}" messages have been deleted.\n\`\`\``;
 
       await sendReply(ctx, interaction, colorResponse);
 
+      // حذف رد البوت بعد ثانية ونصف (1.5s)
       setTimeout(async () => {
         if (interaction) {
           await interaction.deleteReply().catch(() => {});
