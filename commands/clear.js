@@ -19,7 +19,6 @@ module.exports = {
     }
 
     try {
-      // تأجيل الرد فوراً حتى لا يظهر خطأ عدم الاستجابة
       if (interaction && typeof interaction.deferReply === "function" && !interaction.deferred && !interaction.replied) {
         await interaction.deferReply().catch(() => {});
       }
@@ -57,10 +56,8 @@ module.exports = {
         return notify(interaction, channel, "❌ | Failed to delete messages.");
       }
 
-      const deletedCount = deleted.size;
-
-      // النص الأخضر المعتمد
-      const greenText = "```diff\n+ " + deletedCount + " messages have been deleted.\n```";
+      // عرض الرقم المدخل مباشرة في الرسالة الخضراء
+      const greenText = "```diff\n+ " + amount + " messages have been deleted.\n```";
 
       await notify(interaction, channel, greenText);
 
