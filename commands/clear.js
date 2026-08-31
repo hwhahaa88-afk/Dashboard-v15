@@ -2,43 +2,63 @@ const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "clear",
-  description: "Clear messages from channel | مسح الرسائل من الشات",
+  description: "Clear messages | مسح الرسائل",
   permission: PermissionFlagsBits.ManageMessages,
   options: [
-    { name: "amount", type: 4, required: true, description: "Number of messages (1-100) | عدد الرسائل" }
+    {
+      name: "amount",
+      type: 4, // INTEGER
+      required: true,
+      description: "Number of messages to delete | عدد الرسائل"
+    }
   ],
   execute: async (ctx) => {
+    let interaction = ctx.interaction || (ctx.isInteraction && ctx.isInteraction() ? ctx : null);
+
+    if (interaction && !interaction.deferred && !interaction.replied) {
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
+    }
+
     try {
-      const amount = ctx.getInteger("amount");
-      if (amount < 1 || amount > 100) {
-        const replyMsg = await ctx.reply("**❌ | Amount must be between 1 and 100.**");
-        setTimeout(() => {
-          if (replyMsg && replyMsg.delete) replyMsg.delete().catch(() => {});
-        }, 1500);
-        return;
+      let amount = 0;
+      if (interaction) {
+        amount = interaction.options.getInteger("amount");
+      } else if (typeof ctx.getInteger === "function") {
+        amount = ctx.getInteger("amount");
       }
 
-      const deleted = await ctx.channel.bulkDelete(amount, true);
-      const count = deleted.size;
-      const formattedMessage = "```ansi\n\u001b[32m" + count + "\u001b[0m messages have been deleted.\n```";
+      if (!amount || amount < 1 || amount > 100) {
+        return sendReply(ctx, interaction, "❌ | Please specify a number between 1 and 100.");
+      }
 
-      const msg = await ctx.reply(formattedMessage);
+      const deleted = await ctx.channel.bulkDelete(amount, true).catch(() => null);
 
-      setTimeout(async () => {
-        try {
-          if (msg && msg.delete) {
-            await msg.delete();
-          } else if (ctx.interaction) {
-            await ctx.interaction.deleteReply().catch(() => {});
-          }
-        } catch (e) {}
-      }, 1500);
+      if (!deleted) {
+        return sendReply(ctx, interaction, "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted).");
+      }
+
+      const deletedCount = deleted.size;
+
+      // تنسيق النص بالألوان (ANSI Code) لجعل الرقم ملوناً
+      const colorResponse = "```ansi\n\u001b[1;31m" + deletedCount + "\u001b[0m messages have been deleted.\n```";
+
+      return sendReply(ctx, interaction, colorResponse);
 
     } catch (err) {
-      const errorMsg = await ctx.reply("**❌ | An error occurred while clearing messages.**");
-      setTimeout(() => {
-        if (errorMsg && errorMsg.delete) errorMsg.delete().catch(() => {});
-      }, 1500);
+      console.error("CLEAR ERROR:", err);
+      return sendReply(ctx, interaction, "❌ | An error occurred while clearing messages.");
     }
   }
 };
+
+async function sendReply(ctx, interaction, content) {
+  if (interaction) {
+    if (interaction.deferred || interaction.replied) {
+      return interaction.editReply({ content }).catch(() => {});
+    }
+    return interaction.reply({ content, ephemeral: true }).catch(() => {});
+  }
+  if (typeof ctx.reply === "function") {
+    return ctx.reply(content).catch(() => {});
+  }
+}
