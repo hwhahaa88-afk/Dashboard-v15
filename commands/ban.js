@@ -53,6 +53,22 @@ module.exports = {
         return sendReply(ctx, interaction, "**❌ | Invalid User ID or Mention.**");
       }
 
+      // الحصول على الـ client
+      const client = interaction ? interaction.client : ctx.client;
+
+      // جلب بيانات الحساب لمعرفة اسم المستخدم (Username)
+      let username = userId;
+      if (client && client.users) {
+        const userObj = await client.users.fetch(userId).catch(() => null);
+        if (userObj) username = userObj.username;
+      }
+
+      // التحقق مما إذا كان الشخص متبنداً بالفعل في السيرفر
+      const existingBan = await ctx.guild.bans.fetch(userId).catch(() => null);
+      if (existingBan) {
+        return sendReply(ctx, interaction, `**🙄 | ${username} already banned!!**`);
+      }
+
       const reason = (interaction ? interaction.options.getString("reason") : null) || "No reason provided";
       const time = interaction ? interaction.options.getString("time") : null;
       let bulk = interaction ? interaction.options.getBoolean("bulk") : false;
@@ -60,21 +76,12 @@ module.exports = {
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      // تنفيذ الحظر والحصول على معلومات العضو
-      const banResult = await ctx.guild.bans.create(userId, {
+      // تنفيذ الحظر
+      await ctx.guild.bans.create(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
       });
 
-      // استخراج اسم المستخدم (Username)
-      let username = userId;
-      if (banResult && banResult.user && banResult.user.username) {
-        username = banResult.user.username;
-      } else if (banResult && banResult.username) {
-        username = banResult.username;
-      }
-
-      // إرسال الرسالة باسم المستخدم فقط بدون منشن
       return sendReply(ctx, interaction, `**✈️ | ${username} has been banned from server**`);
 
     } catch (err) {
