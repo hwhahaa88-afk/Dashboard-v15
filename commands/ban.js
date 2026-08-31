@@ -55,24 +55,22 @@ module.exports = {
 
       const client = interaction ? interaction.client : (ctx.client || ctx.guild.client);
 
-      // 1. جلب بيانات الشخص لمعرفة اليوزر نيم الحقيقي
+      // 1. جلب بيانات الحساب للحصول على اسم المستخدم (Username)
       let targetUser = null;
       try {
-        targetUser = await client.users.fetch(userId);
+        targetUser = await client.users.fetch(userId, { force: true });
       } catch (e) {
-        // إذا لم يجد العضو أصلاً في ديسكورد
         return sendReply(ctx, interaction, "**❌ | Unknown User: Invalid Discord ID.**");
       }
 
       const username = targetUser.username;
 
-      // 2. التحقق الدقيق هل الشخص متبند حالياً في قائمة البان الخاصة بالسيرفر
+      // 2. فحص دقيق ومباشر من السيرفر تجنباً لمشاكل الكاش (Cache)
       let isBanned = false;
       try {
-        const banInfo = await ctx.guild.bans.fetch(userId);
+        const banInfo = await ctx.guild.bans.fetch({ user: userId, force: true });
         if (banInfo) isBanned = true;
       } catch (e) {
-        // إذا رجّع كود 10026 فمعناه غير متبند
         isBanned = false;
       }
 
