@@ -2,14 +2,14 @@ const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "ban",
-  description: "Ban a user or member from the server | حظر عضو أو أيدي من السيرفر",
+  description: "Ban a user or member | حظر عضو",
   permission: PermissionFlagsBits.BanMembers,
   options: [
     {
       name: "user",
       type: 3,
       required: true,
-      description: "User ID or Mention | أيدي أو منشن الشخص"
+      description: "User ID or Mention | أيدي أو منشن"
     },
     {
       name: "time",
@@ -58,22 +58,12 @@ module.exports = {
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      // تنفيذ الحظر وآخذ كائن الحظر المرجوع
-      const banResult = await ctx.guild.bans.create(userId, {
+      await ctx.guild.bans.create(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
       });
 
-      // استخراج اسم المستخدم بأمان بدون أي خطأ
-      let username = `<@${userId}>`;
-      if (banResult && banResult.user && banResult.user.username) {
-        username = banResult.user.username;
-      } else if (banResult && banResult.username) {
-        username = banResult.username;
-      }
-
-      // إرسال الرسالة بالتنسيق المطلوب
-      return sendReply(ctx, interaction, `**✈️ | ${username} has been banned from server**`);
+      return sendReply(ctx, interaction, `**✈️ | <@${userId}> has been banned from server**`);
 
     } catch (err) {
       console.error("BAN ERROR:", err);
