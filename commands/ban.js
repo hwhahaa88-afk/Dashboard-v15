@@ -33,7 +33,6 @@ module.exports = {
   execute: async (ctx) => {
     let interaction = ctx.interaction || (ctx.isInteraction && ctx.isInteraction() ? ctx : null);
 
-    // الرد السريع خلال أقل من ثانية لتجنب The application did not respond
     if (interaction) {
       if (!interaction.deferred && !interaction.replied) {
         await interaction.deferReply().catch(() => {});
@@ -61,13 +60,22 @@ module.exports = {
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      // تنفيذ الحظر عبر السيرفر
-      await ctx.guild.bans.create(userId, {
+      // تنفيذ الحظر والحصول على معلومات العضو
+      const banResult = await ctx.guild.bans.create(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
       });
 
-      return sendReply(ctx, interaction, `**✈️ | <@${userId}> has been banned from server**`);
+      // استخراج اسم المستخدم (Username)
+      let username = userId;
+      if (banResult && banResult.user && banResult.user.username) {
+        username = banResult.user.username;
+      } else if (banResult && banResult.username) {
+        username = banResult.username;
+      }
+
+      // إرسال الرسالة باسم المستخدم فقط بدون منشن
+      return sendReply(ctx, interaction, `**✈️ | ${username} has been banned from server**`);
 
     } catch (err) {
       console.error("BAN ERROR DETAILS:", err);
