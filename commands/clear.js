@@ -14,7 +14,7 @@ module.exports = {
   ],
   async execute(ctx) {
     try {
-      // 1. قراءة الرقم المدخل بشكل دقيق
+      // 1. استخراج العدد المحدد
       let rawAmount = null;
       if (typeof ctx.getInteger === "function") {
         rawAmount = ctx.getInteger("amount");
@@ -28,16 +28,16 @@ module.exports = {
       if (isNaN(amount) || amount < 1) amount = 1;
       if (amount > 100) amount = 100;
 
-      // 2. الحذف المباشر للرسائل من القناة
+      // 2. إلغاء التأخير وحذف الرسائل من القناة
       const channel = ctx.channel || ctx.raw?.channel;
       if (channel && typeof channel.bulkDelete === "function") {
         await channel.bulkDelete(amount, true).catch(() => {});
       }
 
-      // 3. تجهيز النمط الأخضر بدون الخفاء
+      // 3. النص الأخضر المعتمد
       const clearText = "```diff\n+ " + amount + " messages have been deleted.\n```";
 
-      // 4. الرد المناسب لمنع التوقف على Thinking والظهور للجميع
+      // 4. إرسال رد عام للجميع يحل مشكلة is thinking
       let sentMsg = null;
       if (ctx.raw?.deferred || ctx.deferred) {
         if (ctx.raw?.editReply) {
@@ -53,7 +53,7 @@ module.exports = {
         }
       }
 
-      // 5. حذف الرسالة بعد 1.5 ثانية
+      // 5. مسح التنبيه بعد 1.5 ثانية
       setTimeout(async () => {
         if (sentMsg?.delete) {
           await sentMsg.delete().catch(() => {});
