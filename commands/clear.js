@@ -22,10 +22,10 @@ module.exports = {
     try {
       let amount = null;
 
-      if (interaction) {
-        amount = interaction.options.getInteger("amount");
-      } else if (ctx.options && typeof ctx.options.getInteger === "function") {
-        amount = ctx.options.getInteger("amount");
+      if (interaction && interaction.options) {
+        amount = interaction.options.getInteger("amount") || interaction.options.getNumber("amount");
+      } else if (ctx.options) {
+        amount = typeof ctx.options.getInteger === "function" ? ctx.options.getInteger("amount") : ctx.options.amount;
       } else if (ctx.args && ctx.args[0]) {
         amount = parseInt(ctx.args[0]);
       }
@@ -45,7 +45,7 @@ module.exports = {
 
       const deletedCount = deleted.size;
 
-      // تلوين الرقم داخل مربع التنسيق
+      // تلوين الرقم بلون خاص داخل التنسيق
       const colorResponse = `\`\`\`json\n"${deletedCount}" messages have been deleted.\n\`\`\``;
 
       await sendReply(ctx, interaction, colorResponse);
