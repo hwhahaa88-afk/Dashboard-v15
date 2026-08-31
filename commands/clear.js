@@ -2,81 +2,69 @@ const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "clear",
-  description: "Clear messages | مسح الرسائل",
+  description: "Bulk delete messages (1-100) | حذف عدد من الرسائل",
   permission: PermissionFlagsBits.ManageMessages,
   options: [
     {
       name: "amount",
       type: 4, // INTEGER
       required: true,
-      description: "Number of messages to delete | عدد الرسائل"
+      description: "Number of messages to delete (1-100) | عدد الرسائل"
     }
   ],
-  execute: async (...args) => {
-    let interaction = args.find(a => a && typeof a === "object" && (a.options || a.channel || a.reply));
-    if (!interaction && args[0]) {
-      interaction = args[0].interaction || args[0].int || args[0];
-    }
-
+  async execute(ctx) {
     try {
-      // 1. جلب الرقم المدخل المباشر
-      let requestedAmount = 1;
-
-      if (interaction?.options) {
-        if (typeof interaction.options.getInteger === "function") {
-          requestedAmount = interaction.options.getInteger("amount") || requestedAmount;
-        } else if (typeof interaction.options.get === "function") {
-          requestedAmount = interaction.options.get("amount")?.value || requestedAmount;
-        } else if (interaction.options._hoistedOptions) {
-          const opt = interaction.options._hoistedOptions.find(o => o.name === "amount");
-          if (opt) requestedAmount = opt.value;
-        }
+      // 1. استخراج الرقم المدخل فوراً وتحديد الحد الأقصى
+      let amount = 1;
+      if (ctx?.options?.getInteger) {
+        amount = ctx.options.getInteger("amount");
+      } else if (ctx?.getInteger) {
+        amount = ctx.getInteger("amount");
       }
 
-      requestedAmount = parseInt(requestedAmount);
-      if (isNaN(requestedAmount) || requestedAmount < 1) requestedAmount = 1;
-      if (requestedAmount > 100) requestedAmount = 100;
+      amount = parseInt(amount);
+      if (isNaN(amount) || amount < 1) amount = 1;
+      if (amount > 100) amount = 100;
 
-      const channel = interaction?.channel || args.find(a => a?.bulkDelete)?.channel;
+      const channel = ctx.channel;
       if (!channel) return;
 
-      // 2. مسح الرسائل في Discord
-      await channel.bulkDelete(requestedAmount, true).catch(() => null);
+      // 2. التأجيل المباشر لتفادي خطأ عدم الاستجابة
+      if (ctx.deferReply && typeof ctx.deferReply === "function") {
+        await ctx.deferReply({ ephemeral: true }).catch(() => {});
+      } else if (ctx.raw?.deferReply && typeof ctx.raw.deferReply === "function") {
+        await ctx.raw.deferReply({ ephemeral: true }).catch(() => {});
+      }
 
-      // 3. عرض الرقم المطلوب المباشر في الرسالة الخضراء
-      const greenText = "```diff\n+ " + requestedAmount + " messages have been deleted.\n```";
+      // 3. مسح الرسائل
+      await channel.bulkDelete(amount, true).catch(() => null);
 
-      // 4. إرسال الرد
-      await sendReply(interaction, channel, greenText);
+      // 4. النص الأخضر المعتمد بالرقم الذي كتبته
+      const clearText = "```diff\n+ " + amount + " messages have been deleted.\n```";
+
+      // 5. إرسال الرد وتعديل الرد المأجل
+      let response = null;
+      if (ctx.editReply && typeof ctx.editReply === "function") {
+        response = await ctx.editReply({ content: clearText }).catch(() => null);
+      } else if (ctx.raw?.editReply && typeof ctx.raw.editReply === "function") {
+        response = await ctx.raw.editReply({ content: clearText }).catch(() => null);
+      } else if (ctx.reply && typeof ctx.reply === "function") {
+        response = await ctx.reply({ content: clearText, fetchReply: true }).catch(() => null);
+      }
+
+      // 6. حذف الرد تلقائياً بعد ثانية ونصف
+      setTimeout(async () => {
+        if (response?.delete) {
+          await response.delete().catch(() => {});
+        } else if (ctx.deleteReply && typeof ctx.deleteReply === "function") {
+          await ctx.deleteReply().catch(() => {});
+        } else if (ctx.raw?.deleteReply && typeof ctx.raw.deleteReply === "function") {
+          await ctx.raw.deleteReply().catch(() => {});
+        }
+      }, 1500);
 
     } catch (err) {
-      console.error("CLEAR ERROR:", err);
+      console.error("Clear error:", err);
     }
   }
 };
-
-async function sendReply(interaction, channel, text) {
-  let msg = null;
-
-  if (interaction) {
-    if (typeof interaction.editReply === "function" && (interaction.deferred || interaction.replied)) {
-      msg = await interaction.editReply({ content: text }).catch(() => null);
-    } else if (typeof interaction.reply === "function") {
-      msg = await interaction.reply({ content: text, fetchReply: true }).catch(() => null);
-    }
-  }
-
-  if (!msg && channel && typeof channel.send === "function") {
-    msg = await channel.send(text).catch(() => null);
-  }
-
-  if (msg) {
-    setTimeout(async () => {
-      if (typeof msg.delete === "function") {
-        await msg.delete().catch(() => {});
-      } else if (interaction && typeof interaction.deleteReply === "function") {
-        await interaction.deleteReply().catch(() => {});
-      }
-    }, 1500);
-  }
-}
