@@ -54,8 +54,9 @@ module.exports = {
 
       const deletedCount = deleted.size;
 
-      // تنسيق ANSI المعتمد لإظهار اللون الأخضر على جميع المنصات والهواتف
-      const colorResponse = "```ansi\n\x1b[32m" + deletedCount + "\x1b[0m messages have been deleted.\n```";
+      // كتابة رمز ANSI الخافض للتلوين الأخضر الصريح
+      const greenNumber = `\u001b[1;32m${deletedCount}\u001b[0m`;
+      const colorResponse = "```ansi\n" + greenNumber + " messages have been deleted.\n```";
 
       await notify(interaction, channel, colorResponse);
 
