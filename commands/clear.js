@@ -12,96 +12,76 @@ module.exports = {
       description: "Number of messages to delete | عدد الرسائل"
     }
   ],
-  execute: async (ctx) => {
-    // 1. الاستجابة الفورية لتجنب The application did not respond
-    let interaction = ctx.interaction || (ctx.isInteraction && ctx.isInteraction() ? ctx : null);
-
-    if (interaction) {
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply().catch(() => {});
+  execute: async (interaction) => {
+    // 1. التعامل المباشر مع Slash Command والرد السريع
+    try {
+      if (interaction.deferred || interaction.replied) {
+        // الرد مؤجل بالفعل
+      } else if (typeof interaction.deferReply === "function") {
+        await interaction.deferReply({ ephemeral: true }).catch(() => {});
       }
-    } else if (typeof ctx.deferReply === "function") {
-      await ctx.deferReply().catch(() => {});
-    }
+    } catch (e) {}
 
     try {
+      // 2. قراءة خيار الرقم مباشرة
       let amount = null;
-
-      // 2. استخراج سريع ومباشر للرقم
-      if (interaction && interaction.options) {
-        amount = interaction.options.getInteger("amount") || 
-                 interaction.options.getNumber("amount") || 
-                 interaction.options.get("amount")?.value;
-        
-        if (!amount && interaction.options.data && interaction.options.data[0]) {
-          amount = interaction.options.data[0].value;
+      
+      if (interaction.options) {
+        if (typeof interaction.options.getInteger === "function") {
+          amount = interaction.options.getInteger("amount");
+        } else if (typeof interaction.options.get === "function") {
+          amount = interaction.options.get("amount")?.value;
         }
       }
 
-      if (!amount && ctx.options) {
-        if (typeof ctx.options.getInteger === "function") {
-          amount = ctx.options.getInteger("amount");
-        } else if (typeof ctx.options === "object") {
-          amount = ctx.options.amount || Object.values(ctx.options)[0];
-        }
+      // إذا لم يجد الرقم، حاول قراءته كأول مدخل في الخيارات
+      if (!amount && interaction.options?.data?.[0]) {
+        amount = interaction.options.data[0].value;
       }
 
-      if (!amount && ctx.args && ctx.args[0]) {
-        amount = ctx.args[0];
-      }
-
-      // تحويل القيمة لرقم
       amount = parseInt(amount);
 
-      // في حال لم يتم تحديد رقم صالح، اجعل القيمة الافتراضية 5 رسائل
       if (!amount || isNaN(amount) || amount < 1 || amount > 100) {
-        amount = 5;
+        const errorContent = "❌ | Please specify a number between 1 and 100.";
+        if (interaction.deferred || interaction.replied) {
+          return interaction.editReply({ content: errorContent }).catch(() => {});
+        }
+        return interaction.reply({ content: errorContent, ephemeral: true }).catch(() => {});
       }
 
-      // 3. تنفيذ الحذف
-      const deleted = await ctx.channel.bulkDelete(amount, true).catch((e) => {
-        console.error("BulkDelete Error:", e);
-        return null;
-      });
+      // 3. مسح الرسائل من القناة
+      const channel = interaction.channel;
+      if (!channel) return;
+
+      const deleted = await channel.bulkDelete(amount, true).catch(() => null);
 
       if (!deleted) {
-        return sendReply(ctx, interaction, "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted).");
+        const failMsg = "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted).";
+        if (interaction.deferred || interaction.replied) {
+          return interaction.editReply({ content: failMsg }).catch(() => {});
+        }
+        return interaction.reply({ content: failMsg, ephemeral: true }).catch(() => {});
       }
 
       const deletedCount = deleted.size;
-
-      // تلوين الرقم داخل مربع التنسيق
+      
+      // تلوين الرقم بالأخضر في مربع التنسيق
       const colorResponse = `\`\`\`json\n"${deletedCount}" messages have been deleted.\n\`\`\``;
 
-      await sendReply(ctx, interaction, colorResponse);
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: colorResponse }).catch(() => {});
+      } else {
+        await interaction.reply({ content: colorResponse, ephemeral: true }).catch(() => {});
+      }
 
-      // 4. حذف رد البوت بعد ثانية ونصف (1.5s)
+      // 4. حذف رد البوت تلقائياً بعد ثانية ونصف
       setTimeout(async () => {
-        if (interaction) {
-          await interaction.deleteReply().catch(() => {});
-        } else if (typeof ctx.deleteReply === "function") {
-          await ctx.deleteReply().catch(() => {});
-        }
+        await interaction.deleteReply().catch(() => {});
       }, 1500);
 
     } catch (err) {
-      console.error("CLEAR ERROR:", err);
-      return sendReply(ctx, interaction, "❌ | An error occurred while clearing messages.");
+      console.error("CLEAR COMMAND ERROR:", err);
     }
   }
 };
 
-async function sendReply(ctx, interaction, content) {
-  if (interaction) {
-    if (interaction.deferred || interaction.replied) {
-      return interaction.editReply({ content }).catch(() => {});
-    }
-    return interaction.reply({ content }).catch(() => {});
-  }
-  if (typeof ctx.editReply === "function") {
-    return ctx.editReply({ content }).catch(() => {});
-  }
-  if (typeof ctx.reply === "function") {
-    return ctx.reply(content).catch(() => {});
-  }
-}
