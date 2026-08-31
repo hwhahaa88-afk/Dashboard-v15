@@ -12,66 +12,39 @@ module.exports = {
       description: "Number of messages to delete | عدد الرسائل"
     }
   ],
-  execute: async (...args) => {
-    let interaction = args.find(a => a && typeof a === "object" && (a.options || a.channel || a.reply));
-    if (!interaction && args[0]) {
-      interaction = args[0].interaction || args[0].int || args[0];
-    }
-
+  execute: async (interaction) => {
     try {
-      let amount = null;
-      if (interaction?.options) {
-        if (typeof interaction.options.getInteger === "function") {
-          amount = interaction.options.getInteger("amount");
-        }
-        if (!amount && typeof interaction.options.get === "function") {
-          amount = interaction.options.get("amount")?.value;
-        }
-      }
-
+      // 1. استخراج الرقم المكتوب في الخيار بدقة
+      let amount = interaction.options ? interaction.options.getInteger("amount") : null;
       amount = parseInt(amount);
-      if (isNaN(amount) || amount < 1) amount = 1;
+
+      if (!amount || isNaN(amount) || amount < 1) amount = 1;
       if (amount > 100) amount = 100;
 
-      const channel = interaction?.channel || args.find(a => a?.bulkDelete)?.channel;
+      const channel = interaction.channel;
       if (!channel) return;
 
-      // تنفيذ حذف الرسائل
+      // 2. تأجيل الرد لتفادي تعليق الـ Interaction
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply().catch(() => {});
+      }
+
+      // 3. مسح الرسائل
       await channel.bulkDelete(amount, true).catch(() => null);
 
-      // عرض الرقم الذي أدخلته أنت دائماً
+      // 4. كتابة نفس الرقم الذي أدخلته أنت في النص الأخضر
       const greenText = "```diff\n+ " + amount + " messages have been deleted.\n```";
 
-      await sendReply(interaction, channel, greenText);
+      // 5. تعديل الرد الأساسي فقط بدون إنشاء رسائل جديدة لمنع التكرار
+      await interaction.editReply({ content: greenText }).catch(() => {});
+
+      // 6. حذف الرد تلقائياً بعد ثانية ونصف
+      setTimeout(async () => {
+        await interaction.deleteReply().catch(() => {});
+      }, 1500);
 
     } catch (err) {
-      console.error("CLEAR COMMAND ERROR:", err);
+      console.error("CLEAR ERROR:", err);
     }
   }
 };
-
-async function sendReply(interaction, channel, text) {
-  let msg = null;
-
-  if (interaction) {
-    if (typeof interaction.editReply === "function" && (interaction.deferred || interaction.replied)) {
-      msg = await interaction.editReply({ content: text }).catch(() => null);
-    } else if (typeof interaction.reply === "function") {
-      msg = await interaction.reply({ content: text, fetchReply: true }).catch(() => null);
-    }
-  }
-
-  if (!msg && channel && typeof channel.send === "function") {
-    msg = await channel.send(text).catch(() => null);
-  }
-
-  if (msg) {
-    setTimeout(async () => {
-      if (typeof msg.delete === "function") {
-        await msg.delete().catch(() => {});
-      } else if (interaction && typeof interaction.deleteReply === "function") {
-        await interaction.deleteReply().catch(() => {});
-      }
-    }, 1500);
-  }
-}
