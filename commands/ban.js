@@ -33,10 +33,9 @@ module.exports = {
   execute: async (ctx) => {
     let interaction = ctx.interaction || (ctx.isInteraction && ctx.isInteraction() ? ctx : null);
 
-    if (interaction) {
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply().catch(() => {});
-      }
+    // الرد الفوري المباشر لتجنب انتهائه خلال 3 ثوانٍ
+    if (interaction && !interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
     }
 
     try {
@@ -55,20 +54,19 @@ module.exports = {
 
       const client = interaction ? interaction.client : (ctx.client || ctx.guild.client);
 
-      // 1. جلب بيانات الحساب للحصول على اسم المستخدم (Username)
-      let targetUser = null;
-      try {
-        targetUser = await client.users.fetch(userId, { force: true });
-      } catch (e) {
-        return sendReply(ctx, interaction, "**❌ | Unknown User: Invalid Discord ID.**");
+      // 1. جلب بيانات المستخدم لمعرفة اسم الحساب (Username)
+      let username = userId;
+      if (client && client.users) {
+        const userObj = await client.users.fetch(userId).catch(() => null);
+        if (userObj) {
+          username = userObj.username;
+        }
       }
 
-      const username = targetUser.username;
-
-      // 2. فحص دقيق ومباشر من السيرفر تجنباً لمشاكل الكاش (Cache)
+      // 2. التحقق مما إذا كان متبنداً بالفعل من السيرفر
       let isBanned = false;
       try {
-        const banInfo = await ctx.guild.bans.fetch({ user: userId, force: true });
+        const banInfo = await ctx.guild.bans.fetch(userId);
         if (banInfo) isBanned = true;
       } catch (e) {
         isBanned = false;
