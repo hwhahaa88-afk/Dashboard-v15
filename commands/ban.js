@@ -33,7 +33,6 @@ module.exports = {
   execute: async (ctx) => {
     let interaction = ctx.interaction || (ctx.isInteraction && ctx.isInteraction() ? ctx : null);
 
-    // الرد الفوري المباشر لتجنب انتهائه خلال 3 ثوانٍ
     if (interaction && !interaction.deferred && !interaction.replied) {
       await interaction.deferReply().catch(() => {});
     }
@@ -54,25 +53,19 @@ module.exports = {
 
       const client = interaction ? interaction.client : (ctx.client || ctx.guild.client);
 
-      // 1. جلب بيانات المستخدم لمعرفة اسم الحساب (Username)
+      // 1. جلب اسم الحساب (Username)
       let username = userId;
-      if (client && client.users) {
-        const userObj = await client.users.fetch(userId).catch(() => null);
-        if (userObj) {
-          username = userObj.username;
-        }
-      }
-
-      // 2. التحقق مما إذا كان متبنداً بالفعل من السيرفر
-      let isBanned = false;
       try {
-        const banInfo = await ctx.guild.bans.fetch(userId);
-        if (banInfo) isBanned = true;
+        const userObj = await client.users.fetch(userId);
+        if (userObj) username = userObj.username;
       } catch (e) {
-        isBanned = false;
+        return sendReply(ctx, interaction, "**❌ | Unknown User: Invalid Discord ID.**");
       }
 
-      if (isBanned) {
+      // 2. جلب قائمة الحظر كاملة من السيرفر والفحص المباشر
+      const bansCollection = await ctx.guild.bans.fetch({ cache: false }).catch(() => null);
+      
+      if (bansCollection && bansCollection.has(userId)) {
         return sendReply(ctx, interaction, `**🙄 | ${username} already banned!!**`);
       }
 
@@ -83,7 +76,7 @@ module.exports = {
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      // 3. تنفيذ الحظر
+      // 3. تنفيذ الحظر إذا لم يكن متبنداً
       await ctx.guild.bans.create(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
