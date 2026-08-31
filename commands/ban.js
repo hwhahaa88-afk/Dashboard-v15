@@ -53,19 +53,18 @@ module.exports = {
         return sendReply(ctx, interaction, "**❌ | Invalid User ID or Mention.**");
       }
 
-      // الحصول على الـ client
-      const client = interaction ? interaction.client : ctx.client;
+      const client = interaction ? interaction.client : (ctx.client || ctx.guild.client);
 
-      // جلب بيانات الحساب لمعرفة اسم المستخدم (Username)
+      // 1. جلب اسم المستخدم عبر الـ client
       let username = userId;
       if (client && client.users) {
         const userObj = await client.users.fetch(userId).catch(() => null);
         if (userObj) username = userObj.username;
       }
 
-      // التحقق مما إذا كان الشخص متبنداً بالفعل في السيرفر
-      const existingBan = await ctx.guild.bans.fetch(userId).catch(() => null);
-      if (existingBan) {
+      // 2. الفحص أولاً: هل الحساب متبند سابقاً في السيرفر؟
+      const isBanned = await ctx.guild.bans.fetch(userId).catch(() => null);
+      if (isBanned) {
         return sendReply(ctx, interaction, `**🙄 | ${username} already banned!!**`);
       }
 
@@ -76,7 +75,7 @@ module.exports = {
       let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
       let banReason = time ? `${reason} (Duration: ${time})` : reason;
 
-      // تنفيذ الحظر
+      // 3. تنفيذ الحظر
       await ctx.guild.bans.create(userId, {
         reason: banReason,
         deleteMessageSeconds: deleteMessageSeconds
