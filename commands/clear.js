@@ -13,13 +13,14 @@ module.exports = {
     }
   ],
   execute: async (...args) => {
-    let interaction = args.find(a => a && (a.isChatInputCommand?.() || a.isInteraction?.() || a.options));
+    // 1. استخراج الـ interaction أو الـ channel بأمان تام بدون افتراض دالّات غير موجودة
+    let interaction = args.find(a => a && typeof a === "object" && (a.options || a.channel || a.reply));
     if (!interaction && args[0]) {
       interaction = args[0].interaction || args[0].int || args[0];
     }
 
     try {
-      // 1. استخراج الرقم المدخل
+      // 2. استخراج الرقم المدخل
       let amount = null;
       if (interaction?.options) {
         if (typeof interaction.options.getInteger === "function") {
@@ -37,30 +38,30 @@ module.exports = {
       const channel = interaction?.channel || args.find(a => a?.bulkDelete)?.channel;
       if (!channel) return;
 
-      // 2. مسح الرسائل فوراً
+      // 3. مسح الرسائل
       const deleted = await channel.bulkDelete(amount, true).catch(() => null);
 
       if (!deleted) {
-        return sendResponse(interaction, channel, "❌ | Failed to delete messages.");
+        return sendReply(interaction, channel, "❌ | Failed to delete messages.");
       }
 
-      // 3. النص الأخضر المعتمد بالكامل
+      // 4. تجهيز النص الأخضر
       const greenText = "```diff\n+ " + amount + " messages have been deleted.\n```";
 
-      // 4. إرسال الرد الملون
-      await sendResponse(interaction, channel, greenText);
+      // 5. إرسال الرد
+      await sendReply(interaction, channel, greenText);
 
     } catch (err) {
-      console.error("CLEAR ERROR:", err);
+      console.error("CLEAR COMMAND ERROR:", err);
     }
   }
 };
 
-async function sendResponse(interaction, channel, text) {
+async function sendReply(interaction, channel, text) {
   let msg = null;
 
   if (interaction) {
-    if (interaction.deferred || interaction.replied) {
+    if (typeof interaction.editReply === "function" && (interaction.deferred || interaction.replied)) {
       msg = await interaction.editReply({ content: text }).catch(() => null);
     } else if (typeof interaction.reply === "function") {
       msg = await interaction.reply({ content: text, fetchReply: true }).catch(() => null);
