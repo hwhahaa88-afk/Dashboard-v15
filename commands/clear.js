@@ -13,14 +13,12 @@ module.exports = {
     }
   ],
   execute: async (...args) => {
-    // 1. استخراج الـ interaction أو الـ channel بأمان تام بدون افتراض دالّات غير موجودة
     let interaction = args.find(a => a && typeof a === "object" && (a.options || a.channel || a.reply));
     if (!interaction && args[0]) {
       interaction = args[0].interaction || args[0].int || args[0];
     }
 
     try {
-      // 2. استخراج الرقم المدخل
       let amount = null;
       if (interaction?.options) {
         if (typeof interaction.options.getInteger === "function") {
@@ -38,17 +36,12 @@ module.exports = {
       const channel = interaction?.channel || args.find(a => a?.bulkDelete)?.channel;
       if (!channel) return;
 
-      // 3. مسح الرسائل
-      const deleted = await channel.bulkDelete(amount, true).catch(() => null);
+      // تنفيذ حذف الرسائل
+      await channel.bulkDelete(amount, true).catch(() => null);
 
-      if (!deleted) {
-        return sendReply(interaction, channel, "❌ | Failed to delete messages.");
-      }
-
-      // 4. تجهيز النص الأخضر
+      // عرض الرقم الذي أدخلته أنت دائماً
       const greenText = "```diff\n+ " + amount + " messages have been deleted.\n```";
 
-      // 5. إرسال الرد
       await sendReply(interaction, channel, greenText);
 
     } catch (err) {
