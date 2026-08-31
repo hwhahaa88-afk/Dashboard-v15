@@ -13,21 +13,24 @@ module.exports = {
     }
   ],
   execute: async (ctx, arg2) => {
+    // 1. استخراج كائن الـ Interaction
     let interaction = ctx?.interaction || (ctx?.isInteraction && ctx?.isInteraction() ? ctx : null);
     if (!interaction && arg2 && (arg2.isInteraction?.() || arg2.options)) {
       interaction = arg2;
     }
 
-    // 1. الاستجابة الفورية المخفية (ephemeral) أو المؤجلة
-    if (interaction && !interaction.deferred && !interaction.replied) {
-      await interaction.deferReply({ ephemeral: true }).catch(() => {});
+    if (!interaction) return;
+
+    // 2. تأجيل الرد فوراً لتجنب انتهاء المهلة
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
     }
 
     try {
       let amount = null;
 
-      // 2. استخراج قيمة الرقم
-      if (interaction && interaction.options) {
+      // 3. استخراج الرقم بدقة من خيارات الأمر
+      if (interaction.options) {
         if (typeof interaction.options.getInteger === "function") {
           amount = interaction.options.getInteger("amount");
         }
@@ -35,80 +38,51 @@ module.exports = {
           amount = interaction.options.get("amount")?.value;
         }
         if (!amount && interaction.options._hoistedOptions?.length > 0) {
-          amount = interaction.options._hoistedOptions[0].value;
+          const opt = interaction.options._hoistedOptions.find(o => o.name === "amount");
+          if (opt) amount = opt.value;
         }
         if (!amount && interaction.options.data?.length > 0) {
-          amount = interaction.options.data[0].value;
+          const opt = interaction.options.data.find(o => o.name === "amount");
+          if (opt) amount = opt.value;
         }
       }
 
-      if (!amount && ctx) {
-        if (typeof ctx.getInteger === "function") {
-          amount = ctx.getInteger("amount");
-        } else if (ctx.options) {
-          if (typeof ctx.options.getInteger === "function") {
-            amount = ctx.options.getInteger("amount");
-          } else if (typeof ctx.options === "object") {
-            amount = ctx.options.amount || ctx.options._hoistedOptions?.[0]?.value || Object.values(ctx.options)[0];
-          }
-        } else if (ctx.args && ctx.args[0]) {
-          amount = ctx.args[0];
-        }
+      if (!amount && ctx?.args && ctx.args[0]) {
+        amount = ctx.args[0];
       }
 
-      if (typeof amount === "string" || typeof amount === "object") {
-        amount = parseInt(amount?.value || amount);
-      }
+      amount = parseInt(amount);
 
+      // في حال عدم توفر الرقم، يتم افتراض 5 رسائل بدون إظهار رسالة خطأ
       if (!amount || isNaN(amount) || amount < 1 || amount > 100) {
-        return sendReply(ctx, interaction, "❌ | Please specify a number between 1 and 100.");
+        amount = 5;
       }
 
-      const channel = interaction?.channel || ctx?.channel;
+      // 4. تنفيذ مسح الرسائل
+      const channel = interaction.channel;
       if (!channel) return;
 
-      // 3. حذف الرسائل أولاً من القناة
       const deleted = await channel.bulkDelete(amount, true).catch(() => null);
 
       if (!deleted) {
-        return sendReply(ctx, interaction, "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted).");
+        return interaction.editReply({ content: "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted)." }).catch(() => {});
       }
 
       const deletedCount = deleted.size;
 
-      // 4. إرسال الرسالة الملونة بالأخضر اللامع (ANSI) كرسالة عادية في القناة لتشاهدها
-      const colorResponse = "```ansi\n\u001b[1;32m" + deletedCount + "\u001b[0m messages have been deleted.\n```";
+      // 5. تلوين الرقم بالأخضر اللامع باستخدام ANSI
+      const coloredText = "```ansi\n\u001b[1;32m" + deletedCount + "\u001b[0m messages have been deleted.\n```";
 
-      // نرسل الرد كرسالة جديدة في القناة لتبقى واضحة
-      const sentMsg = await channel.send(colorResponse).catch(() => null);
+      // التحديث على الرد المؤجل بـ رسالة واحدة فقط
+      await interaction.editReply({ content: coloredText }).catch(() => {});
 
-      // تنظيف الـ interaction المؤجل إن وجد
-      if (interaction) {
+      // 6. حذف الرد تلقائياً بعد ثانية ونصف
+      setTimeout(async () => {
         await interaction.deleteReply().catch(() => {});
-      }
-
-      // 5. حذف رسالة التأكيد بعد ثانية ونصف (1.5 ثانية)
-      if (sentMsg) {
-        setTimeout(async () => {
-          await sentMsg.delete().catch(() => {});
-        }, 1500);
-      }
+      }, 1500);
 
     } catch (err) {
       console.error("CLEAR ERROR:", err);
-      return sendReply(ctx, interaction, "❌ | An error occurred while clearing messages.");
     }
   }
 };
-
-async function sendReply(ctx, interaction, content) {
-  if (interaction) {
-    if (interaction.deferred || interaction.replied) {
-      return interaction.editReply({ content }).catch(() => {});
-    }
-    return interaction.reply({ content }).catch(() => {});
-  }
-  if (ctx && typeof ctx.reply === "function") {
-    return ctx.reply({ content }).catch(() => {});
-  }
-}
