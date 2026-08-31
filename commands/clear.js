@@ -19,33 +19,34 @@ module.exports = {
     }
 
     try {
-      // 1. قراءة الرقم المدخل المباشر من المستخدم
-      let amount = null;
+      // 1. جلب الرقم المدخل المباشر
+      let requestedAmount = 1;
+
       if (interaction?.options) {
         if (typeof interaction.options.getInteger === "function") {
-          amount = interaction.options.getInteger("amount");
+          requestedAmount = interaction.options.getInteger("amount") || requestedAmount;
         } else if (typeof interaction.options.get === "function") {
-          amount = interaction.options.get("amount")?.value;
-        } else if (interaction.options._hoistedOptions?.length > 0) {
+          requestedAmount = interaction.options.get("amount")?.value || requestedAmount;
+        } else if (interaction.options._hoistedOptions) {
           const opt = interaction.options._hoistedOptions.find(o => o.name === "amount");
-          if (opt) amount = opt.value;
+          if (opt) requestedAmount = opt.value;
         }
       }
 
-      amount = parseInt(amount);
-      if (isNaN(amount) || amount < 1) amount = 1;
-      if (amount > 100) amount = 100;
+      requestedAmount = parseInt(requestedAmount);
+      if (isNaN(requestedAmount) || requestedAmount < 1) requestedAmount = 1;
+      if (requestedAmount > 100) requestedAmount = 100;
 
       const channel = interaction?.channel || args.find(a => a?.bulkDelete)?.channel;
       if (!channel) return;
 
-      // 2. مسح الرسائل
-      await channel.bulkDelete(amount, true).catch(() => null);
+      // 2. مسح الرسائل في Discord
+      await channel.bulkDelete(requestedAmount, true).catch(() => null);
 
-      // 3. النص الأخضر بالرقم المدخل تحديداً
-      const greenText = "```diff\n+ " + amount + " messages have been deleted.\n```";
+      // 3. عرض الرقم المطلوب المباشر في الرسالة الخضراء
+      const greenText = "```diff\n+ " + requestedAmount + " messages have been deleted.\n```";
 
-      // 4. إرسال رد واحد آمن بدون تكرار
+      // 4. إرسال الرد
       await sendReply(interaction, channel, greenText);
 
     } catch (err) {
