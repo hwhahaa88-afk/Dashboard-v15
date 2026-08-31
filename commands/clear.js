@@ -20,20 +20,24 @@ module.exports = {
     }
 
     try {
-      let amount = 0;
+      let amount = null;
+
       if (interaction) {
         amount = interaction.options.getInteger("amount");
-      } else if (typeof ctx.getInteger === "function") {
-        amount = ctx.getInteger("amount");
       } else if (ctx.options && typeof ctx.options.getInteger === "function") {
         amount = ctx.options.getInteger("amount");
+      } else if (ctx.args && ctx.args[0]) {
+        amount = parseInt(ctx.args[0]);
       }
 
-      if (!amount || amount < 1 || amount > 100) {
+      if (!amount || isNaN(amount) || amount < 1 || amount > 100) {
         return sendReply(ctx, interaction, "❌ | Please specify a number between 1 and 100.");
       }
 
-      const deleted = await ctx.channel.bulkDelete(amount, true).catch(() => null);
+      const deleted = await ctx.channel.bulkDelete(amount, true).catch((e) => {
+        console.error("BulkDelete Error:", e);
+        return null;
+      });
 
       if (!deleted) {
         return sendReply(ctx, interaction, "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted).");
@@ -41,12 +45,12 @@ module.exports = {
 
       const deletedCount = deleted.size;
 
-      // تلوين الرقم بالأخضر داخل التنسيق
+      // تلوين الرقم داخل مربع التنسيق
       const colorResponse = `\`\`\`json\n"${deletedCount}" messages have been deleted.\n\`\`\``;
 
       await sendReply(ctx, interaction, colorResponse);
 
-      // حذف رد البوت بعد ثانية ونصف
+      // حذف رسالة البوت بعد 1.5 ثانية
       setTimeout(async () => {
         if (interaction) {
           await interaction.deleteReply().catch(() => {});
