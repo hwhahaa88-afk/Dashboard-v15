@@ -1,4 +1,4 @@
-const { PermissionFlagsBits } = require("discord.js");
+const { PermissionFlagsBits, EmbedBuilder } = require("discord.js");
 
 module.exports = {
   name: "clear",
@@ -49,16 +49,17 @@ module.exports = {
       const deleted = await channel.bulkDelete(amount, true).catch(() => null);
 
       if (!deleted) {
-        return notify(interaction, channel, "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted).");
+        return notify(interaction, channel, { content: "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted)." });
       }
 
       const deletedCount = deleted.size;
 
-      // كتابة رمز ANSI الخافض للتلوين الأخضر الصريح
-      const greenNumber = `\u001b[1;32m${deletedCount}\u001b[0m`;
-      const colorResponse = "```ansi\n" + greenNumber + " messages have been deleted.\n```";
+      // إنشاء Embed باللون الأخضر يظهر ملوناً على الهاتف والجوال
+      const embed = new EmbedBuilder()
+        .setColor(0x57F287) // لون أخضر ديسكورد الشهير (Green)
+        .setDescription(`✅ **\`${deletedCount}\`** messages have been deleted.`);
 
-      await notify(interaction, channel, colorResponse);
+      await notify(interaction, channel, { embeds: [embed] });
 
     } catch (err) {
       console.error("CLEAR EXECUTION ERROR:", err);
@@ -66,19 +67,19 @@ module.exports = {
   }
 };
 
-async function notify(interaction, channel, text) {
+async function notify(interaction, channel, payload) {
   let msg = null;
 
   if (interaction) {
     if (interaction.deferred || interaction.replied) {
-      msg = await interaction.editReply({ content: text }).catch(() => null);
+      msg = await interaction.editReply(payload).catch(() => null);
     } else if (typeof interaction.reply === "function") {
-      msg = await interaction.reply({ content: text, fetchReply: true }).catch(() => null);
+      msg = await interaction.reply({ ...payload, fetchReply: true }).catch(() => null);
     }
   }
 
   if (!msg && channel && typeof channel.send === "function") {
-    msg = await channel.send(text).catch(() => null);
+    msg = await channel.send(payload).catch(() => null);
   }
 
   if (msg) {
