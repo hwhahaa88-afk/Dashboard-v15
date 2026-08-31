@@ -22,10 +22,13 @@ module.exports = {
     try {
       let amount = null;
 
-      if (interaction && interaction.options) {
-        amount = interaction.options.getInteger("amount") || interaction.options.getNumber("amount");
+      // استخراج قيمة الرقم بأكثر من طريقة مضمونة
+      if (interaction) {
+        const optionObj = interaction.options.get("amount");
+        amount = optionObj ? parseInt(optionObj.value) : null;
       } else if (ctx.options) {
-        amount = typeof ctx.options.getInteger === "function" ? ctx.options.getInteger("amount") : ctx.options.amount;
+        const optionObj = typeof ctx.options.get === "function" ? ctx.options.get("amount") : null;
+        amount = optionObj ? parseInt(optionObj.value) : parseInt(ctx.options.amount);
       } else if (ctx.args && ctx.args[0]) {
         amount = parseInt(ctx.args[0]);
       }
@@ -45,12 +48,12 @@ module.exports = {
 
       const deletedCount = deleted.size;
 
-      // تلوين الرقم بلون خاص داخل التنسيق
+      // تلوين الرقم داخل مربع التنسيق
       const colorResponse = `\`\`\`json\n"${deletedCount}" messages have been deleted.\n\`\`\``;
 
       await sendReply(ctx, interaction, colorResponse);
 
-      // حذف رسالة البوت بعد 1.5 ثانية
+      // حذف رسالة البوت تلقائياً بعد ثانية ونصف
       setTimeout(async () => {
         if (interaction) {
           await interaction.deleteReply().catch(() => {});
