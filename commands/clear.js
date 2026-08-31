@@ -14,7 +14,7 @@ module.exports = {
   ],
   async execute(ctx) {
     try {
-      // 1. استخراج الرقم المدخل فوراً وتحديد الحد الأقصى
+      // 1. قراءة الرقم المدخل
       let amount = 1;
       if (ctx?.options?.getInteger) {
         amount = ctx.options.getInteger("amount");
@@ -29,11 +29,11 @@ module.exports = {
       const channel = ctx.channel;
       if (!channel) return;
 
-      // 2. التأجيل المباشر لتفادي خطأ عدم الاستجابة
+      // 2. تأجيل الرد عامة (غير مخفية) لتجنب خطأ التايم أوت
       if (ctx.deferReply && typeof ctx.deferReply === "function") {
-        await ctx.deferReply({ ephemeral: true }).catch(() => {});
+        await ctx.deferReply({ flags: 0 }).catch(() => {});
       } else if (ctx.raw?.deferReply && typeof ctx.raw.deferReply === "function") {
-        await ctx.raw.deferReply({ ephemeral: true }).catch(() => {});
+        await ctx.raw.deferReply().catch(() => {});
       }
 
       // 3. مسح الرسائل
@@ -42,7 +42,7 @@ module.exports = {
       // 4. النص الأخضر المعتمد بالرقم الذي كتبته
       const clearText = "```diff\n+ " + amount + " messages have been deleted.\n```";
 
-      // 5. إرسال الرد وتعديل الرد المأجل
+      // 5. تعديل الرد لإظهاره للجميع
       let response = null;
       if (ctx.editReply && typeof ctx.editReply === "function") {
         response = await ctx.editReply({ content: clearText }).catch(() => null);
@@ -52,7 +52,7 @@ module.exports = {
         response = await ctx.reply({ content: clearText, fetchReply: true }).catch(() => null);
       }
 
-      // 6. حذف الرد تلقائياً بعد ثانية ونصف
+      // 6. حذف رسالة التأكيد العامة تلقائياً بعد ثانية ونصف
       setTimeout(async () => {
         if (response?.delete) {
           await response.delete().catch(() => {});
