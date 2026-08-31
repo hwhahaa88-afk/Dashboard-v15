@@ -17,7 +17,7 @@ module.exports = {
       const member = await ctx.getUserMember("user");
       if (!member || !member.voice?.channel) return ctx.reply("**❌ | Member is not in a voice channel.**");
       await member.voice.setMute(true);
-      return ctx.reply("**✅ | Voice muted " + (member.user?.username || member.displayName) + "**");
+      return ctx.reply("**🤐 | Voice muted " + (member.user?.username || member.displayName) + "**");
     } catch (err) {
       return ctx.reply("**❌ | Error voice muting.**");
     }

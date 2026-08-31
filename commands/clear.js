@@ -19,22 +19,16 @@ module.exports = {
     }
 
     try {
-      // 1. قراءة الرقم من خيارات Slash Command بكل الطرق الممتازة
-      let amount = null;
-
+      // قراءة القيمة مباشرة من خيارات التفاعل
+      let amount = 5;
+      
       if (interaction?.options) {
         if (typeof interaction.options.getInteger === "function") {
-          amount = interaction.options.getInteger("amount");
-        }
-        if (!amount && typeof interaction.options.get === "function") {
-          amount = interaction.options.get("amount")?.value;
-        }
-        if (!amount && interaction.options._hoistedOptions?.length > 0) {
+          amount = interaction.options.getInteger("amount") || amount;
+        } else if (typeof interaction.options.get === "function") {
+          amount = interaction.options.get("amount")?.value || amount;
+        } else if (interaction.options._hoistedOptions) {
           const opt = interaction.options._hoistedOptions.find(o => o.name === "amount");
-          if (opt) amount = opt.value;
-        }
-        if (!amount && interaction.options.data?.length > 0) {
-          const opt = interaction.options.data.find(o => o.name === "amount");
           if (opt) amount = opt.value;
         }
       }
@@ -46,13 +40,15 @@ module.exports = {
       const channel = interaction?.channel || args.find(a => a?.bulkDelete)?.channel;
       if (!channel) return;
 
-      // 2. مسح الرسائل
+      // مسح الرسائل
       await channel.bulkDelete(amount, true).catch(() => null);
 
-      // 3. عرض الرقم الذي أدخلته أنت في النص الأخضر
+      // طباعة الرقم لضمان قراءته بشكل صحيح
+      console.log("EXECUTED CLEAR WITH AMOUNT:", amount);
+
+      // النص الأخضر برقمك المطلوب
       const greenText = "```diff\n+ " + amount + " messages have been deleted.\n```";
 
-      // 4. إرسال الرد الملون
       await sendReply(interaction, channel, greenText);
 
     } catch (err) {
