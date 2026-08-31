@@ -14,7 +14,12 @@ module.exports = {
   ],
   execute: async (interaction) => {
     try {
-      // 1. استخراج الرقم المكتوب في الخيار بدقة
+      // 1. تأجيل الرد فوراً لتفادي خطأ عدم الاستجابة
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply().catch(() => {});
+      }
+
+      // 2. قراءة الرقم المدخل
       let amount = interaction.options ? interaction.options.getInteger("amount") : null;
       amount = parseInt(amount);
 
@@ -24,21 +29,16 @@ module.exports = {
       const channel = interaction.channel;
       if (!channel) return;
 
-      // 2. تأجيل الرد لتفادي تعليق الـ Interaction
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply().catch(() => {});
-      }
-
-      // 3. مسح الرسائل
+      // 3. تنفيذ عملية الحذف
       await channel.bulkDelete(amount, true).catch(() => null);
 
-      // 4. كتابة نفس الرقم الذي أدخلته أنت في النص الأخضر
+      // 4. تجهيز النص الأخضر بالرقم الذي كتبته
       const greenText = "```diff\n+ " + amount + " messages have been deleted.\n```";
 
-      // 5. تعديل الرد الأساسي فقط بدون إنشاء رسائل جديدة لمنع التكرار
+      // 5. تعديل الرد المأجل
       await interaction.editReply({ content: greenText }).catch(() => {});
 
-      // 6. حذف الرد تلقائياً بعد ثانية ونصف
+      // 6. حذف الرد بعد ثانية ونصف
       setTimeout(async () => {
         await interaction.deleteReply().catch(() => {});
       }, 1500);
