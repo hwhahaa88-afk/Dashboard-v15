@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, EmbedBuilder } = require("discord.js");
+const { PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
   name: "clear",
@@ -49,17 +49,21 @@ module.exports = {
       const deleted = await channel.bulkDelete(amount, true).catch(() => null);
 
       if (!deleted) {
-        return notify(interaction, channel, { content: "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted)." });
+        return notify(interaction, channel, { content: "❌ | Failed to delete messages." });
       }
 
       const deletedCount = deleted.size;
 
-      // إنشاء Embed باللون الأخضر يظهر ملوناً على الهاتف والجوال
-      const embed = new EmbedBuilder()
-        .setColor(0x57F287) // لون أخضر ديسكورد الشهير (Green)
-        .setDescription(`✅ **\`${deletedCount}\`** messages have been deleted.`);
+      // تحويل الرقم إلى إيموجيات أرقام خضراء/مضيئة تظهر ملونة في الجوال
+      const numberEmojis = {
+        '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+        '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'
+      };
+      const greenNum = deletedCount.toString().split('').map(d => numberEmojis[d] || d).join('');
 
-      await notify(interaction, channel, { embeds: [embed] });
+      const responseText = `✅ **${greenNum}** messages have been deleted.`;
+
+      await notify(interaction, channel, { content: responseText });
 
     } catch (err) {
       console.error("CLEAR EXECUTION ERROR:", err);
