@@ -22,42 +22,50 @@ module.exports = {
     try {
       let amount = null;
 
-      // 1. قراءة أي مدخل رقمي تم تمريره في خيارات الـ interaction بغض النظر عن المسمى
-      if (interaction && interaction.options) {
-        if (typeof interaction.options.getInteger === "function") {
-          amount = interaction.options.getInteger("amount");
+      // دالة لاستخراج أي رقم موجود داخل أي كائن متداخل
+      const findNumberInObject = (obj) => {
+        if (!obj) return null;
+        if (typeof obj === "number" && !isNaN(obj)) return obj;
+        if (typeof obj === "string" && !isNaN(parseInt(obj)) && parseInt(obj) > 0) return parseInt(obj);
+
+        if (Array.isArray(obj)) {
+          for (let item of obj) {
+            let res = findNumberInObject(item);
+            if (res) return res;
+          }
+        } else if (typeof obj === "object") {
+          if (obj.value !== undefined) {
+            let res = findNumberInObject(obj.value);
+            if (res) return res;
+          }
+          for (let key in obj) {
+            if (key === "client" || key === "guild" || key === "channel" || key === "user" || key === "member") continue;
+            let res = findNumberInObject(obj[key]);
+            if (res) return res;
+          }
         }
-        
-        // إذا لم يجده بالاسم، يبحث في أول خيار مُدخل مهما كان اسمه
-        if (!amount && interaction.options.data && interaction.options.data.length > 0) {
-          amount = parseInt(interaction.options.data[0].value);
-        }
-        
-        if (!amount && interaction.options._hoistedOptions && interaction.options._hoistedOptions.length > 0) {
-          amount = parseInt(interaction.options._hoistedOptions[0].value);
-        }
+        return null;
+      };
+
+      // 1. محاولة استخراج الرقم بالدالة الرسمية
+      if (interaction && interaction.options && typeof interaction.options.getInteger === "function") {
+        amount = interaction.options.getInteger("amount");
       }
 
-      // 2. إذا كان الأمر عبر الرسائل العادية أو عبر ctx
-      if (!amount && ctx.args && ctx.args[0]) {
-        amount = parseInt(ctx.args[0]);
+      // 2. إذا فشل، ابحث في خيارات interaction.options.data
+      if (!amount && interaction && interaction.options && interaction.options.data) {
+        amount = findNumberInObject(interaction.options.data);
       }
 
-      if (!amount && ctx.options) {
-        if (Array.isArray(ctx.options) && ctx.options.length > 0) {
-          amount = parseInt(ctx.options[0].value || ctx.options[0]);
-        } else if (typeof ctx.options === "object") {
-          const firstVal = Object.values(ctx.options)[0];
-          amount = parseInt(firstVal);
-        }
+      // 3. البحث في كل كائن ctx كخيار أخير
+      if (!amount) {
+        amount = findNumberInObject(ctx.options || ctx.args || ctx.params);
       }
 
-      // التحقق من صحة الرقم
       if (!amount || isNaN(amount) || amount < 1 || amount > 100) {
         return sendReply(ctx, interaction, "❌ | Please specify a number between 1 and 100.");
       }
 
-      // تنفيذ عملية الحذف
       const deleted = await ctx.channel.bulkDelete(amount, true).catch((e) => {
         console.error("BulkDelete Error:", e);
         return null;
@@ -69,12 +77,12 @@ module.exports = {
 
       const deletedCount = deleted.size;
 
-      // تلوين الرقم داخل مربع النص
+      // تلوين الرقم داخل المربع
       const colorResponse = `\`\`\`json\n"${deletedCount}" messages have been deleted.\n\`\`\``;
 
       await sendReply(ctx, interaction, colorResponse);
 
-      // حذف رد البوت بعد ثانية ونصف (1.5s)
+      // حذف رسالة البوت بعد 1.5 ثانية
       setTimeout(async () => {
         if (interaction) {
           await interaction.deleteReply().catch(() => {});
