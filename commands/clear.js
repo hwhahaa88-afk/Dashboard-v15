@@ -12,28 +12,16 @@ module.exports = {
       description: "Number of messages to delete | عدد الرسائل"
     }
   ],
-  execute: async (...args) => {
-    // 1. استخراج كائن Interaction
-    let interaction = args.find(a => a && (typeof a.isChatInputCommand === "function" || typeof a.isInteraction === "function" || a.options));
-    
-    if (!interaction && args[0]) {
-      interaction = args[0].interaction || args[0].int || args[0];
+  execute: async (interaction) => {
+    // 1. التعامل مع التأجيل الآمن لمنع تكرار deferReply
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
     }
-
-    if (!interaction) return;
-
-    // 2. تجنب التكرار وإلغاء الاستجابات المتعددة
-    if (interaction.replied || interaction.deferred) {
-      return;
-    }
-
-    // تأجيل الرد فوراً لتجنب انتهاء المهلة (The application did not respond)
-    await interaction.deferReply().catch(() => {});
 
     try {
       let amount = null;
 
-      // 3. استخراج الرقم الممرر للأمر
+      // 2. استخراج الرقم المدخل من خيارات Slash Command
       if (interaction.options) {
         if (typeof interaction.options.getInteger === "function") {
           amount = interaction.options.getInteger("amount");
@@ -51,46 +39,39 @@ module.exports = {
         }
       }
 
-      if (!amount) {
-        for (let arg of args) {
-          if (typeof arg === "number") { amount = arg; break; }
-          if (arg && typeof arg === "object" && arg.amount) { amount = arg.amount; break; }
-        }
-      }
-
       amount = parseInt(amount);
 
-      // إذا لم يتحدد الرقم يتم تعيين 5 كحد افتراضي بدون إظهار رسالة خطأ
       if (!amount || isNaN(amount) || amount < 1 || amount > 100) {
         amount = 5;
       }
 
-      // 4. تنفيذ مسح الرسائل
+      // 3. تنفيذ حذف الرسائل
       const channel = interaction.channel;
       if (!channel) return;
 
       const deleted = await channel.bulkDelete(amount, true).catch(() => null);
 
       if (!deleted) {
-        return interaction.editReply({ content: "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted)." }).catch(() => {});
+        const failMsg = "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted).";
+        return interaction.editReply({ content: failMsg }).catch(() => {});
       }
 
       const deletedCount = deleted.size;
       const ESC = String.fromCharCode(27);
 
-      // 5. تلوين الرقم بالأخضر اللامع باستخدام ANSI
+      // 4. التلوين باللون الأخضر اللامع
       const colorResponse = "```ansi\n" + ESC + "[1;32m" + deletedCount + ESC + "[0m messages have been deleted.\n```";
 
-      // إرسال الرد
+      // 5. تعديل الرد المباشر
       await interaction.editReply({ content: colorResponse }).catch(() => {});
 
-      // 6. حذف الرد تلقائياً بعد ثانية ونصف
+      // 6. حذف الرد تلقائياً بعد 1.5 ثانية
       setTimeout(async () => {
         await interaction.deleteReply().catch(() => {});
       }, 1500);
 
     } catch (err) {
-      console.error("CLEAR ERROR:", err);
+      console.error("CLEAR COMMAND ERROR:", err);
     }
   }
 };
