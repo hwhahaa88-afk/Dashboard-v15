@@ -12,24 +12,28 @@ module.exports = {
       description: "Number of messages to delete | عدد الرسائل"
     }
   ],
-  execute: async (ctx, arg2) => {
-    // 1. استخراج كائن الـ Interaction
-    let interaction = ctx?.interaction || (ctx?.isInteraction && ctx?.isInteraction() ? ctx : null);
-    if (!interaction && arg2 && (arg2.isInteraction?.() || arg2.options)) {
-      interaction = arg2;
+  execute: async (...args) => {
+    // 1. استخراج كائن Interaction
+    let interaction = args.find(a => a && (typeof a.isChatInputCommand === "function" || typeof a.isInteraction === "function" || a.options));
+    
+    if (!interaction && args[0]) {
+      interaction = args[0].interaction || args[0].int || args[0];
     }
 
     if (!interaction) return;
 
-    // 2. تأجيل الرد فوراً لتجنب انتهاء المهلة
-    if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply().catch(() => {});
+    // 2. تجنب التكرار وإلغاء الاستجابات المتعددة
+    if (interaction.replied || interaction.deferred) {
+      return;
     }
+
+    // تأجيل الرد فوراً لتجنب انتهاء المهلة (The application did not respond)
+    await interaction.deferReply().catch(() => {});
 
     try {
       let amount = null;
 
-      // 3. استخراج الرقم بدقة من خيارات الأمر
+      // 3. استخراج الرقم الممرر للأمر
       if (interaction.options) {
         if (typeof interaction.options.getInteger === "function") {
           amount = interaction.options.getInteger("amount");
@@ -37,23 +41,26 @@ module.exports = {
         if (!amount && typeof interaction.options.get === "function") {
           amount = interaction.options.get("amount")?.value;
         }
-        if (!amount && interaction.options._hoistedOptions?.length > 0) {
+        if (!amount && interaction.options._hoistedOptions) {
           const opt = interaction.options._hoistedOptions.find(o => o.name === "amount");
           if (opt) amount = opt.value;
         }
-        if (!amount && interaction.options.data?.length > 0) {
+        if (!amount && interaction.options.data) {
           const opt = interaction.options.data.find(o => o.name === "amount");
           if (opt) amount = opt.value;
         }
       }
 
-      if (!amount && ctx?.args && ctx.args[0]) {
-        amount = ctx.args[0];
+      if (!amount) {
+        for (let arg of args) {
+          if (typeof arg === "number") { amount = arg; break; }
+          if (arg && typeof arg === "object" && arg.amount) { amount = arg.amount; break; }
+        }
       }
 
       amount = parseInt(amount);
 
-      // في حال عدم توفر الرقم، يتم افتراض 5 رسائل بدون إظهار رسالة خطأ
+      // إذا لم يتحدد الرقم يتم تعيين 5 كحد افتراضي بدون إظهار رسالة خطأ
       if (!amount || isNaN(amount) || amount < 1 || amount > 100) {
         amount = 5;
       }
@@ -69,12 +76,13 @@ module.exports = {
       }
 
       const deletedCount = deleted.size;
+      const ESC = String.fromCharCode(27);
 
       // 5. تلوين الرقم بالأخضر اللامع باستخدام ANSI
-      const coloredText = "```ansi\n\u001b[1;32m" + deletedCount + "\u001b[0m messages have been deleted.\n```";
+      const colorResponse = "```ansi\n" + ESC + "[1;32m" + deletedCount + ESC + "[0m messages have been deleted.\n```";
 
-      // التحديث على الرد المؤجل بـ رسالة واحدة فقط
-      await interaction.editReply({ content: coloredText }).catch(() => {});
+      // إرسال الرد
+      await interaction.editReply({ content: colorResponse }).catch(() => {});
 
       // 6. حذف الرد تلقائياً بعد ثانية ونصف
       setTimeout(async () => {
