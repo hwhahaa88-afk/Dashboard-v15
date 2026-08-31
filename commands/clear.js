@@ -19,14 +19,23 @@ module.exports = {
     }
 
     try {
-      // 1. قراءة الرقم المدخل بأمان
+      // 1. قراءة الرقم من خيارات Slash Command بكل الطرق الممتازة
       let amount = null;
+
       if (interaction?.options) {
         if (typeof interaction.options.getInteger === "function") {
           amount = interaction.options.getInteger("amount");
         }
         if (!amount && typeof interaction.options.get === "function") {
           amount = interaction.options.get("amount")?.value;
+        }
+        if (!amount && interaction.options._hoistedOptions?.length > 0) {
+          const opt = interaction.options._hoistedOptions.find(o => o.name === "amount");
+          if (opt) amount = opt.value;
+        }
+        if (!amount && interaction.options.data?.length > 0) {
+          const opt = interaction.options.data.find(o => o.name === "amount");
+          if (opt) amount = opt.value;
         }
       }
 
@@ -40,10 +49,10 @@ module.exports = {
       // 2. مسح الرسائل
       await channel.bulkDelete(amount, true).catch(() => null);
 
-      // 3. النص الأخضر المعتمد
+      // 3. عرض الرقم الذي أدخلته أنت في النص الأخضر
       const greenText = "```diff\n+ " + amount + " messages have been deleted.\n```";
 
-      // 4. إرسال الرد
+      // 4. إرسال الرد الملون
       await sendReply(interaction, channel, greenText);
 
     } catch (err) {
