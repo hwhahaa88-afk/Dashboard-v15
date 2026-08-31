@@ -12,58 +12,36 @@ module.exports = {
       description: "Number of messages to delete (1-100) | عدد الرسائل"
     }
   ],
-  async execute(interaction) {
-    // التعامل المباشر مع interaction سواء كان يدوياً أو عبر ctx
-    const int = interaction.interaction || interaction.raw || interaction;
-
+  async execute(ctx) {
     try {
-      // 1. التأجيل المباشر الفوري قبل أي معالجة لتجنب Is Thinking
-      if (typeof int.deferReply === "function" && !int.deferred && !int.replied) {
-        await int.deferReply().catch(() => {});
+      // 1. جلب الرقم المكتوب مباشرة
+      let amount = ctx.options?.getInteger("amount") || ctx.getInteger?.("amount") || 1;
+      amount = Math.min(Math.max(parseInt(amount) || 1, 1), 100);
+
+      // 2. مسح الرسائل فوراً من الروم
+      await ctx.channel.bulkDelete(amount, true).catch(() => {});
+
+      // 3. إرسال النص الأخضر العام للجميع بدون تأخير وبدون ephemeral
+      const msgContent = "```diff\n+ " + amount + " messages have been deleted.\n```";
+
+      let replyMsg;
+      if (ctx.reply) {
+        replyMsg = await ctx.reply({ content: msgContent, fetchReply: true }).catch(() => {});
+      } else if (ctx.raw?.reply) {
+        replyMsg = await ctx.raw.reply({ content: msgContent, fetchReply: true }).catch(() => {});
       }
 
-      // 2. قراءة قيمة الرقم مباشرة
-      let amount = 1;
-      if (int.options?.getInteger) {
-        amount = int.options.getInteger("amount");
-      } else if (int.options?.get) {
-        amount = int.options.get("amount")?.value;
-      }
-
-      amount = parseInt(amount);
-      if (isNaN(amount) || amount < 1) amount = 1;
-      if (amount > 100) amount = 100;
-
-      // 3. تنفيذ مسح الرسائل
-      const channel = int.channel;
-      if (channel && typeof channel.bulkDelete === "function") {
-        await channel.bulkDelete(amount, true).catch(() => null);
-      }
-
-      // 4. إرسال الرسالة الخضراء بالرقم المطلوب
-      const clearText = "```diff\n+ " + amount + " messages have been deleted.\n```";
-
-      let responseMsg = null;
-      if (typeof int.editReply === "function") {
-        responseMsg = await int.editReply({ content: clearText }).catch(() => null);
-      } else if (typeof int.reply === "function") {
-        responseMsg = await int.reply({ content: clearText, fetchReply: true }).catch(() => null);
-      }
-
-      // 5. حذف رسالة التأكيد بعد ثانية ونصف
-      setTimeout(async () => {
-        if (responseMsg?.delete) {
-          await responseMsg.delete().catch(() => {});
-        } else if (typeof int.deleteReply === "function") {
-          await int.deleteReply().catch(() => {});
+      // 4. حذف رسالة التأكيد بعد 1.5 ثانية
+      setTimeout(() => {
+        if (replyMsg?.delete) {
+          replyMsg.delete().catch(() => {});
+        } else if (ctx.deleteReply) {
+          ctx.deleteReply().catch(() => {});
         }
       }, 1500);
 
     } catch (err) {
-      console.error("Clear Error:", err);
-      if (int && typeof int.editReply === "function") {
-        await int.editReply({ content: "❌ | حدث خطأ أثناء تنفيذ الأمر." }).catch(() => {});
-      }
+      console.error("Clear Command Error:", err);
     }
   }
 };
