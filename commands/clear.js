@@ -15,58 +15,50 @@ module.exports = {
   execute: async (ctx) => {
     let interaction = ctx.interaction || (ctx.isInteraction && ctx.isInteraction() ? ctx : null);
 
-    // 1. الاستجابة الفورية لمنع التأخير
     if (interaction && !interaction.deferred && !interaction.replied) {
       await interaction.deferReply().catch(() => {});
     }
 
     try {
-      let rawAmount = null;
+      let amount = null;
 
-      // 2. البحث عن القيمة في كافة الأماكن الممكنة
-      if (interaction && interaction.options) {
-        if (typeof interaction.options.getInteger === "function") {
-          rawAmount = interaction.options.getInteger("amount");
+      // استخراج قيمة الرقم المباشرة من تفاصيل الـ interaction
+      if (interaction) {
+        if (typeof interaction.options?.getInteger === "function") {
+          amount = interaction.options.getInteger("amount");
         }
-        if (!rawAmount && typeof interaction.options.get === "function") {
-          rawAmount = interaction.options.get("amount")?.value;
+        if (!amount && interaction.options?._hoistedOptions) {
+          const opt = interaction.options._hoistedOptions.find(o => o.name === "amount");
+          if (opt) amount = opt.value;
         }
-        if (!rawAmount && interaction.options.data && interaction.options.data.length > 0) {
-          rawAmount = interaction.options.data[0].value;
-        }
-        if (!rawAmount && interaction.options._hoistedOptions && interaction.options._hoistedOptions.length > 0) {
-          rawAmount = interaction.options._hoistedOptions[0].value;
+        if (!amount && interaction.options?.data) {
+          const opt = interaction.options.data.find(o => o.name === "amount");
+          if (opt) amount = opt.value;
         }
       }
 
-      if (!rawAmount && ctx.options) {
+      if (!amount && ctx.options) {
         if (typeof ctx.options.getInteger === "function") {
-          rawAmount = ctx.options.getInteger("amount");
+          amount = ctx.options.getInteger("amount");
         } else if (typeof ctx.options === "object") {
-          rawAmount = ctx.options.amount || Object.values(ctx.options)[0];
+          amount = ctx.options.amount || ctx.options.value;
         }
       }
 
-      if (!rawAmount && ctx.args && ctx.args[0]) {
-        rawAmount = ctx.args[0];
+      if (!amount && ctx.args && ctx.args[0]) {
+        amount = ctx.args[0];
       }
 
-      // تحويل المدخل إلى رقم صحبح
-      let amount = parseInt(rawAmount);
+      amount = parseInt(amount);
 
-      // إذا لم يتحدد الرقم لأي سبب، افتراضياً يحذف 5 رسائل لتجنب إظهار رسالة الخطأ
       if (!amount || isNaN(amount) || amount < 1 || amount > 100) {
-        amount = 5;
+        return sendReply(ctx, interaction, "❌ | Please specify a number between 1 and 100.");
       }
 
-      // 3. مسح الرسائل
       const channel = interaction ? interaction.channel : ctx.channel;
       if (!channel) return;
 
-      const deleted = await channel.bulkDelete(amount, true).catch((e) => {
-        console.error("BulkDelete Error:", e);
-        return null;
-      });
+      const deleted = await channel.bulkDelete(amount, true).catch(() => null);
 
       if (!deleted) {
         return sendReply(ctx, interaction, "❌ | Failed to delete messages (Messages older than 14 days cannot be deleted).");
@@ -74,12 +66,12 @@ module.exports = {
 
       const deletedCount = deleted.size;
 
-      // تلوين الرقم داخل المربع
-      const colorResponse = `\`\`\`json\n"${deletedCount}" messages have been deleted.\n\`\`\``;
+      // تلوين الرقم داخل مربع التنسيق باستخدام ansi
+      const colorResponse = "```ansi\n\u001b[1;36m" + deletedCount + "\u001b[0m messages have been deleted.\n```";
 
       await sendReply(ctx, interaction, colorResponse);
 
-      // 4. حذف رد البوت بعد ثانية ونصف (1.5s)
+      // حذف رسالة البوت بعد ثانية ونصف (1.5s)
       setTimeout(async () => {
         if (interaction) {
           await interaction.deleteReply().catch(() => {});
