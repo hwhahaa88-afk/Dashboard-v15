@@ -19,15 +19,14 @@ module.exports = {
     }
 
     try {
-      // قراءة القيمة مباشرة من خيارات التفاعل
-      let amount = 5;
-      
+      // 1. قراءة الرقم المدخل المباشر من المستخدم
+      let amount = null;
       if (interaction?.options) {
         if (typeof interaction.options.getInteger === "function") {
-          amount = interaction.options.getInteger("amount") || amount;
+          amount = interaction.options.getInteger("amount");
         } else if (typeof interaction.options.get === "function") {
-          amount = interaction.options.get("amount")?.value || amount;
-        } else if (interaction.options._hoistedOptions) {
+          amount = interaction.options.get("amount")?.value;
+        } else if (interaction.options._hoistedOptions?.length > 0) {
           const opt = interaction.options._hoistedOptions.find(o => o.name === "amount");
           if (opt) amount = opt.value;
         }
@@ -40,15 +39,13 @@ module.exports = {
       const channel = interaction?.channel || args.find(a => a?.bulkDelete)?.channel;
       if (!channel) return;
 
-      // مسح الرسائل
+      // 2. مسح الرسائل
       await channel.bulkDelete(amount, true).catch(() => null);
 
-      // طباعة الرقم لضمان قراءته بشكل صحيح
-      console.log("EXECUTED CLEAR WITH AMOUNT:", amount);
-
-      // النص الأخضر برقمك المطلوب
+      // 3. النص الأخضر بالرقم المدخل تحديداً
       const greenText = "```diff\n+ " + amount + " messages have been deleted.\n```";
 
+      // 4. إرسال رد واحد آمن بدون تكرار
       await sendReply(interaction, channel, greenText);
 
     } catch (err) {
