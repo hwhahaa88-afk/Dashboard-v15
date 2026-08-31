@@ -54,16 +54,10 @@ module.exports = {
 
       const deletedCount = deleted.size;
 
-      // تحويل الرقم إلى إيموجيات أرقام خضراء/مضيئة تظهر ملونة في الجوال
-      const numberEmojis = {
-        '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
-        '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'
-      };
-      const greenNum = deletedCount.toString().split('').map(d => numberEmojis[d] || d).join('');
+      // تنسيق diff باللون الأخضر المباشر والمدعوم على كل أجهزة الجوال
+      const greenText = "```diff\n+ " + deletedCount + " messages have been deleted.\n```";
 
-      const responseText = `✅ **${greenNum}** messages have been deleted.`;
-
-      await notify(interaction, channel, { content: responseText });
+      await notify(interaction, channel, { content: greenText });
 
     } catch (err) {
       console.error("CLEAR EXECUTION ERROR:", err);
