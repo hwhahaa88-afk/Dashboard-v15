@@ -23,8 +23,10 @@ module.exports = {
       let amount = 0;
       if (interaction) {
         amount = interaction.options.getInteger("amount");
-      } else if (typeof ctx.getString === "function") {
-        amount = parseInt(ctx.getString("amount"));
+      } else if (typeof ctx.getInteger === "function") {
+        amount = ctx.getInteger("amount");
+      } else if (ctx.options && typeof ctx.options.getInteger === "function") {
+        amount = ctx.options.getInteger("amount");
       }
 
       if (!amount || amount < 1 || amount > 100) {
@@ -39,17 +41,15 @@ module.exports = {
 
       const deletedCount = deleted.size;
 
-      // تنسيق الرقم بلون واضح ومختلف (استخدام syntax highlighting)
-      const colorResponse = `\`\`\`prolog\n${deletedCount} messages have been deleted.\n\`\`\``;
+      // تلوين الرقم بالأخضر داخل التنسيق
+      const colorResponse = `\`\`\`json\n"${deletedCount}" messages have been deleted.\n\`\`\``;
 
-      // إرسال الرد وتخزين الرسالة لحذفها بعد 1.5 ثانية
-      const msg = await sendReply(ctx, interaction, colorResponse);
+      await sendReply(ctx, interaction, colorResponse);
 
+      // حذف رد البوت بعد ثانية ونصف
       setTimeout(async () => {
         if (interaction) {
           await interaction.deleteReply().catch(() => {});
-        } else if (msg && typeof msg.delete === "function") {
-          await msg.delete().catch(() => {});
         }
       }, 1500);
 
