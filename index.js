@@ -48,13 +48,6 @@ client.on('interactionCreate', async (interaction) => {
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
 
-  // تأكيد استلام التفاعل فورياً لإلغاء حالة التفكير فوراً
-  let isDeferred = false;
-  try {
-    await interaction.deferReply().catch(() => null);
-    isDeferred = true;
-  } catch (e) {}
-
   const ctx = {
     isSlash: true,
     guild: interaction.guild,
@@ -69,15 +62,16 @@ client.on('interactionCreate', async (interaction) => {
     reply: async (content) => {
       let payload = typeof content === 'string' ? { content } : { ...content };
 
-      // IMPORTANT: do not swallow errors here. If editReply/followUp fails
-      // silently, the interaction never resolves and Discord shows
-      // "is thinking..." forever with zero visible error. Re-throwing lets
-      // the outer command try/catch (and index.js's hardened fallback)
-      // actually handle it and guarantee a response.
+      // No more auto-defer, so a command's first reply() call almost always
+      // hits the direct interaction.reply() branch below — an instant,
+      // flash-free response. If a command explicitly deferred itself (e.g.
+      // for a slow operation), we still handle that correctly here too.
       if (interaction.replied) {
         return await interaction.followUp(payload);
-      } else {
+      } else if (interaction.deferred) {
         return await interaction.editReply(payload);
+      } else {
+        return await interaction.reply(payload);
       }
     }
   };
