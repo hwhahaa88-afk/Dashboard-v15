@@ -3,7 +3,7 @@ const { PermissionFlagsBits, EmbedBuilder, Colors } = require('discord.js');
 module.exports = {
   name: 'clear',
   description: 'Bulk delete messages (1-100)',
-  permission: PermissionFlagsBits.ManageMessages,
+  permission: PermissionFlagsBits.ManageChannels,
   options: [
     {
       name: 'amount',
@@ -22,19 +22,32 @@ module.exports = {
       return ctx.reply({ embeds: [errorEmbed] });
     }
 
+    // index.js defers this interaction publicly (non-ephemeral), which posts
+    // a REAL visible message in the channel ("is thinking..."). If we then
+    // fetch/delete the channel's latest messages without excluding it, we
+    // end up deleting the bot's own pending reply — and the later editReply
+    // call fails with "Unknown Message", even though deletion itself worked.
+    let ownReplyId = null;
     try {
-      // index.js has already deferred this interaction — do NOT defer again here.
-      const fetched = await ctx.channel.messages.fetch({ limit: amount });
-      const deleted = await ctx.channel.bulkDelete(fetched, true);
+      const ownReply = await ctx.raw.fetchReply();
+      ownReplyId = ownReply.id;
+    } catch {
+      // If we can't determine it, we proceed anyway — worst case is a rare
+      // off-by-one, not a crash.
+    }
+
+    try {
+      const fetchLimit = Math.min(amount + 1, 100);
+      const fetched = await ctx.channel.messages.fetch({ limit: fetchLimit });
+      const toDelete = fetched.filter((m) => m.id !== ownReplyId).first(amount);
+
+      const deleted = await ctx.channel.bulkDelete(toDelete, true);
 
       const successEmbed = new EmbedBuilder()
         .setColor(Colors.Green)
         .setDescription(`✅ \`${deleted.size}\` messages have been deleted.`);
 
-      // ctx.reply resolves the already-deferred interaction (editReply under the hood).
       await ctx.reply({ embeds: [successEmbed] });
-
-      // Auto-delete the confirmation after 1.5 seconds.
       setTimeout(() => ctx.raw.deleteReply().catch(() => {}), 1500);
     } catch (err) {
       console.error('Clear command error:', err);
