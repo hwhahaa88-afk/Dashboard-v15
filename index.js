@@ -3,6 +3,13 @@ const fs = require('fs');
 const path = require('path');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 
+process.on('unhandledRejection', (reason) => {
+  console.error('🔴 Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('🔴 Uncaught Exception:', err);
+});
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -34,6 +41,8 @@ client.once('ready', () => {
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
+
+  try {
 
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
@@ -77,6 +86,17 @@ client.on('interactionCreate', async (interaction) => {
   } catch (error) {
     console.error(`Error executing ${interaction.commandName}:`, error);
     await interaction.editReply({ content: '❌ حدث خطأ أثناء تنفيذ هذا الأمر!' }).catch(() => null);
+  }
+} catch (topLevelError) {
+    console.error('🔴 Top-level interactionCreate error:', topLevelError);
+    try {
+      const payload = { content: '❌ حدث خطأ غير متوقع أثناء تنفيذ هذا الأمر!' };
+      if (interaction.replied) await interaction.followUp(payload);
+      else if (interaction.deferred) await interaction.editReply(payload);
+      else await interaction.reply(payload);
+    } catch (finalError) {
+      console.error('🔴 Failed to send top-level fallback reply:', finalError);
+    }
   }
 });
 
