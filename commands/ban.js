@@ -1,112 +1,67 @@
-const { PermissionFlagsBits } = require("discord.js");
+const { PermissionFlagsBits, EmbedBuilder, Colors } = require('discord.js');
+
+const SNOWFLAKE_REGEX = /^\d{17,20}$/;
 
 module.exports = {
-  name: "ban",
-  description: "Ban a user or member | حظر عضو",
+  name: 'ban',
+  description: 'Ban a user by ID',
   permission: PermissionFlagsBits.BanMembers,
   options: [
     {
-      name: "user",
-      type: 3,
+      name: 'userid',
+      type: 3, // STRING
       required: true,
-      description: "User ID or Mention | أيدي أو منشن"
+      description: 'The User ID to ban',
     },
     {
-      name: "time",
-      type: 3,
+      name: 'reason',
+      type: 3, // STRING
       required: false,
-      description: "Ban duration | مدة الحظر"
+      description: 'Reason for the ban',
     },
-    {
-      name: "reason",
-      type: 3,
-      required: false,
-      description: "Reason | السبب"
-    },
-    {
-      name: "bulk",
-      type: 5,
-      required: false,
-      description: "Delete messages | مسح الرسائل"
-    }
   ],
-  execute: async (ctx) => {
-    let interaction = ctx.interaction || (ctx.isInteraction && ctx.isInteraction() ? ctx : null);
+  async execute(ctx) {
+    const userId = (ctx.getString('userid') || '').trim();
+    const reason = ctx.getString('reason') || 'No reason provided';
 
-    if (interaction && !interaction.deferred && !interaction.replied) {
-      await interaction.deferReply().catch(() => {});
+    if (!SNOWFLAKE_REGEX.test(userId)) {
+      const errorEmbed = new EmbedBuilder()
+        .setColor(Colors.Red)
+        .setDescription('❌ | That doesn\'t look like a valid User ID (should be 17-20 digits, no spaces).');
+      return ctx.reply({ embeds: [errorEmbed] });
+    }
+
+    // Best-effort: fetch the user's tag for a nicer confirmation message.
+    // Banning itself works by ID alone even if this fetch fails.
+    let displayName = userId;
+    try {
+      const fetchedUser = await ctx.raw.client.users.fetch(userId);
+      displayName = fetchedUser.tag;
+    } catch {
+      // Unknown/invalid account — we'll still attempt the ban by raw ID.
+    }
+
+    // Check if already banned first, to give a clear ProBot-style message.
+    const existingBan = await ctx.guild.bans.fetch(userId).catch(() => null);
+    if (existingBan) {
+      const alreadyEmbed = new EmbedBuilder()
+        .setColor(Colors.Yellow)
+        .setDescription(`🙄 | ${displayName} is already banned!!`);
+      return ctx.reply({ embeds: [alreadyEmbed] });
     }
 
     try {
-      let rawInput = "";
-      if (interaction) {
-        rawInput = interaction.options.getString("user") || "";
-      } else if (typeof ctx.getString === "function") {
-        rawInput = ctx.getString("user") || "";
-      }
-
-      const userId = rawInput.replace(/[<@!>]/g, "").trim();
-
-      if (!userId || isNaN(userId)) {
-        return sendReply(ctx, interaction, "**❌ | Invalid User ID or Mention.**");
-      }
-
-      const client = interaction ? interaction.client : (ctx.client || ctx.guild.client);
-
-      // 1. جلب اسم الحساب (Username)
-      let username = userId;
-      try {
-        const userObj = await client.users.fetch(userId);
-        if (userObj) username = userObj.username;
-      } catch (e) {
-        return sendReply(ctx, interaction, "**❌ | Unknown User: Invalid Discord ID.**");
-      }
-
-      // 2. جلب قائمة الحظر كاملة من السيرفر والفحص المباشر
-      const bansCollection = await ctx.guild.bans.fetch({ cache: false }).catch(() => null);
-      
-      if (bansCollection && bansCollection.has(userId)) {
-        return sendReply(ctx, interaction, `**🙄 | ${username} already banned!!**`);
-      }
-
-      const reason = (interaction ? interaction.options.getString("reason") : null) || "No reason provided";
-      const time = interaction ? interaction.options.getString("time") : null;
-      let bulk = interaction ? interaction.options.getBoolean("bulk") : false;
-
-      let deleteMessageSeconds = bulk ? 7 * 24 * 60 * 60 : 0;
-      let banReason = time ? `${reason} (Duration: ${time})` : reason;
-
-      // 3. تنفيذ الحظر إذا لم يكن متبنداً
-      await ctx.guild.bans.create(userId, {
-        reason: banReason,
-        deleteMessageSeconds: deleteMessageSeconds
-      });
-
-      return sendReply(ctx, interaction, `**✈️ | ${username} has been banned from server**`);
-
+      await ctx.guild.bans.create(userId, { reason });
+      const successEmbed = new EmbedBuilder()
+        .setColor(Colors.Green)
+        .setDescription(`✅ | ${displayName} has been banned from the server!\n📝 Reason: ${reason}`);
+      return ctx.reply({ embeds: [successEmbed] });
     } catch (err) {
-      console.error("BAN ERROR DETAILS:", err);
-      let errorMsg = `**❌ | Error Code ${err.code || 'UNKNOWN'}: ${err.message || "Failed to ban"}**`;
-
-      if (err.code === 50013) {
-        errorMsg = "**❌ | Missing Permissions: Make sure my bot role is HIGHER than the person you are banning!**";
-      } else if (err.code === 10013) {
-        errorMsg = "**❌ | Unknown User: Invalid Discord ID.**";
-      }
-
-      return sendReply(ctx, interaction, errorMsg);
+      console.error('Ban command error:', err.message);
+      const failEmbed = new EmbedBuilder()
+        .setColor(Colors.Red)
+        .setDescription(`❌ | Failed to ban this user: ${err.message}`);
+      return ctx.reply({ embeds: [failEmbed] });
     }
-  }
+  },
 };
-
-async function sendReply(ctx, interaction, content) {
-  if (interaction) {
-    if (interaction.deferred || interaction.replied) {
-      return interaction.editReply({ content }).catch(() => {});
-    }
-    return interaction.reply({ content }).catch(() => {});
-  }
-  if (typeof ctx.reply === "function") {
-    return ctx.reply(content).catch(() => {});
-  }
-}
