@@ -2,6 +2,7 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const http = require('http');
 
 process.on('unhandledRejection', (reason) => {
   console.error('🔴 Unhandled Rejection:', reason);
@@ -101,3 +102,14 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
+// Render (Web Service) requires an open HTTP port, or it will repeatedly
+// restart this process after a port-scan timeout — which was silently
+// killing the bot mid-command and causing interactions to hang forever.
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('OS System Engine bot is running.');
+});
+server.listen(process.env.PORT || 3000, () => {
+  console.log(`🌐 HTTP server listening on port ${process.env.PORT || 3000}`);
+});
