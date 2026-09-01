@@ -1,52 +1,59 @@
-const { REST, Routes } = require('discord.js');
-const { commands } = require('./commands.js');
 require('dotenv').config();
+const { REST, Routes, Client, GatewayIntentBits } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
-const OPTION_TYPES = {
-  string: 3,
-  integer: 4,
-  boolean: 5,
-  user: 6,
-  channel: 7,
-  role: 8,
-  mentionable: 9,
-  number: 10,
-  attachment: 11,
-  subcommand: 1,
-  subcommandgroup: 2
-};
+const commands = [];
+const commandsPath = path.join(__dirname, 'commands');
 
-function fixOptions(options = []) {
-  return options.map(opt => {
-    let type = opt.type;
-    if (typeof type === 'string') {
-      type = OPTION_TYPES[type.toLowerCase().trim()] || 3;
+if (fs.existsSync(commandsPath)) {
+  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+  for (const file of commandFiles) {
+    const filePath = path.join(commandsPath, file);
+    const command = require(filePath);
+    if ('name' in command && 'execute' in command) {
+      commands.push(command);
     }
-    const fixed = { ...opt, type };
-    if (fixed.options && Array.isArray(fixed.options)) {
-      fixed.options = fixOptions(fixed.options);
-    }
-    return fixed;
-  });
+  }
 }
 
-const payload = commands.map(cmd => ({
-  name: cmd.name.toLowerCase().trim(),
-  description: cmd.description,
-  options: fixOptions(cmd.options || [])
-}));
-
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
-(async () => {
-  try {
-    console.log(`Started refreshing ${payload.length} application (/) commands.`);
-    const data = await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: payload }
-    );
-    console.log(`✅ Successfully reloaded ${data.length} application (/) commands.`);
-  } catch (error) {
-    console.error('Error deploying commands:', error);
+if (fs.existsSync(path.join(__dirname, 'commands.js'))) {
+  const mainModule = require('./commands');
+  const mainCommands = mainModule.commands || mainModule;
+  if (Array.isArray(mainCommands)) {
+    for (const cmd of mainCommands) {
+      if (cmd && cmd.name && !commands.some(c => c.name === cmd.name)) {
+        commands.push(cmd);
+      }
+    }
   }
-})();
+}
+
+// تحويل BigInt إلى String
+const cleanedCommands = JSON.parse(
+  JSON.stringify(commands, (key, value) =>
+    typeof value === 'bigint' ? value.toString() : value
+  )
+);
+
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+client.once('ready', async () => {
+  try {
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    console.log(`Started refreshing ${cleanedCommands.length} application (/) commands.`);
+
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: cleanedCommands }
+    );
+
+    console.log('Successfully reloaded application (/) commands.');
+  } catch (error) {
+    console.error(error);
+  } finally {
+    client.destroy();
+  }
+});
+
+client.login(process.env.DISCORD_TOKEN);

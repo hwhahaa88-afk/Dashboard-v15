@@ -13,49 +13,35 @@ module.exports = {
     },
   ],
   async execute(ctx) {
-    const amount = ctx.options.getInteger('amount');
+    const amount = ctx.getInteger('amount');
 
     if (amount === null || amount === undefined || Number.isNaN(amount) || amount < 1 || amount > 100) {
       const errorEmbed = new EmbedBuilder()
         .setColor(Colors.Red)
         .setDescription('❌ Please enter a number between 1 and 100.');
-      // Not deferred yet at this point, so a plain reply is correct here.
-      return ctx.reply({ embeds: [errorEmbed], ephemeral: true });
+      return ctx.reply({ embeds: [errorEmbed] });
     }
 
     try {
-      // Guard against double-defer/double-reply, which is what silently
-      // breaks the interaction and causes "did not respond".
-      if (!ctx.deferred && !ctx.replied) {
-        await ctx.deferReply({ ephemeral: false }); // public, visible to everyone
-      }
-
+      // index.js has already deferred this interaction — do NOT defer again here.
       const fetched = await ctx.channel.messages.fetch({ limit: amount });
       const deleted = await ctx.channel.bulkDelete(fetched, true);
 
       const successEmbed = new EmbedBuilder()
         .setColor(Colors.Green)
-        .setDescription(`✅ **${deleted.size}** messages have been deleted.`);
+        .setDescription(`✅ \`${deleted.size}\` messages have been deleted.`);
 
-      // Resolve the interaction itself with editReply — this is what marks
-      // it as "responded" in Discord's eyes. Sending a separate channel
-      // message instead of this is exactly what caused the original bug.
-      await ctx.editReply({ embeds: [successEmbed] });
+      // ctx.reply resolves the already-deferred interaction (editReply under the hood).
+      await ctx.reply({ embeds: [successEmbed] });
 
-      // Now that the interaction is properly resolved, auto-delete after 1.5s.
-      setTimeout(() => ctx.deleteReply().catch(() => {}), 1500);
+      // Auto-delete the confirmation after 1.5 seconds.
+      setTimeout(() => ctx.raw.deleteReply().catch(() => {}), 1500);
     } catch (err) {
       console.error('Clear command error:', err);
-      try {
-        const failEmbed = new EmbedBuilder()
-          .setColor(Colors.Red)
-          .setDescription('❌ Failed to delete messages (they may be older than 14 days, or I lack permission).');
-        if (ctx.deferred || ctx.replied) {
-          await ctx.editReply({ embeds: [failEmbed] });
-        } else {
-          await ctx.reply({ embeds: [failEmbed], ephemeral: true });
-        }
-      } catch {}
+      const failEmbed = new EmbedBuilder()
+        .setColor(Colors.Red)
+        .setDescription('❌ Failed to delete messages (they may be older than 14 days, or I lack permission).');
+      await ctx.reply({ embeds: [failEmbed] });
     }
   },
 };

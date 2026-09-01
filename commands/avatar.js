@@ -1,23 +1,80 @@
-const { PermissionFlagsBits } = require("discord.js");
+const { EmbedBuilder, ApplicationCommandOptionType } = require('discord.js');
 
 module.exports = {
-  name: "avatar",
-  description: "Display user avatar | صورة العضو",
+  name: 'avatar',
+  description: 'Displays user avatar or banner',
   options: [
     {
-        "name": "user",
-        "type": 6,
-        "required": false,
-        "description": "Select user"
-    }
-],
-  execute: async (ctx) => {
+      name: 'user',
+      type: ApplicationCommandOptionType.User,
+      description: 'The user to fetch the avatar for',
+      required: false,
+    },
+    {
+      name: 'type',
+      type: ApplicationCommandOptionType.String,
+      description: 'avatar_type_description',
+      required: false,
+      choices: [
+        { name: 'Server', value: 'server' },
+        { name: 'Banner', value: 'banner' },
+      ],
+    },
+  ],
+  async execute(ctx) {
     try {
-      const member = (await ctx.getUserMember("user")) || ctx.member;
-      const url = member.user.displayAvatarURL({ dynamic: true, size: 1024 });
-      return ctx.reply("**🖼️ | Avatar:**\n" + url);
+      const userOption = ctx.raw.options.getUser('user') || ctx.invoker;
+      const typeOption = ctx.getString('type');
+
+      // جلب بيانات العضو في السيرفر وبيانات المستخدم الكاملة لـ Banner
+      const member = await ctx.guild.members.fetch(userOption.id).catch(() => null);
+      const fetchedUser = await ctx.raw.client.users.fetch(userOption.id, { force: true }).catch(() => userOption);
+
+      let imageURL = '';
+      let titleText = 'Avatar';
+
+      if (typeOption === 'server') {
+        if (member && member.avatar) {
+          imageURL = member.avatarURL({ dynamic: true, size: 1024 });
+        } else {
+          imageURL = userOption.displayAvatarURL({ dynamic: true, size: 1024 });
+        }
+        titleText = 'Server Avatar';
+      } else if (typeOption === 'banner') {
+        if (fetchedUser.banner) {
+          imageURL = fetchedUser.bannerURL({ dynamic: true, size: 1024 });
+          titleText = 'Banner';
+        } else {
+          return await ctx.reply({ content: `❌ | **${userOption.username}** does not have a banner.` });
+        }
+      } else {
+        if (member && member.avatar) {
+          titleText = 'Global & Server\nAvatar';
+        } else {
+          titleText = 'Avatar';
+        }
+        imageURL = userOption.displayAvatarURL({ dynamic: true, size: 1024 });
+      }
+
+      const embed = new EmbedBuilder()
+        .setAuthor({
+          name: userOption.username,
+          iconURL: userOption.displayAvatarURL({ dynamic: true }),
+        })
+        .setTitle('Avatar Link')
+        .setURL(imageURL)
+        .setDescription(`🌐 **${titleText}**`)
+        .setImage(imageURL)
+        .setThumbnail(imageURL)
+        .setFooter({
+          text: `Requested by ${ctx.invoker.username}`,
+          iconURL: ctx.invoker.displayAvatarURL({ dynamic: true }),
+        });
+
+      await ctx.reply({ embeds: [embed] });
     } catch (err) {
-      return ctx.reply("**❌ | Could not fetch avatar.**");
-    } 
-  }
+      console.error('Avatar command error:', err);
+      await ctx.reply({ content: '❌ | Could not fetch avatar.' }).catch(() => null);
+    }
+  },
 };
