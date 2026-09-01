@@ -58,15 +58,16 @@ client.on('interactionCreate', async (interaction) => {
     getString: (name) => interaction.options.getString(name),
     reply: async (content) => {
       let payload = typeof content === 'string' ? { content } : { ...content };
-      
-      try {
-        if (interaction.replied) {
-          return await interaction.followUp(payload);
-        } else {
-          return await interaction.editReply(payload);
-        }
-      } catch (err) {
-        console.error('Reply execution error:', err);
+
+      // IMPORTANT: do not swallow errors here. If editReply/followUp fails
+      // silently, the interaction never resolves and Discord shows
+      // "is thinking..." forever with zero visible error. Re-throwing lets
+      // the outer command try/catch (and index.js's hardened fallback)
+      // actually handle it and guarantee a response.
+      if (interaction.replied) {
+        return await interaction.followUp(payload);
+      } else {
+        return await interaction.editReply(payload);
       }
     }
   };
