@@ -1,14 +1,5 @@
 const { PermissionFlagsBits, EmbedBuilder, Colors } = require('discord.js');
 
-function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Timed out after ${ms}ms: ${label}`)), ms)
-    ),
-  ]);
-}
-
 module.exports = {
   name: 'clear',
   description: 'Bulk delete messages (1-100)',
@@ -31,27 +22,37 @@ module.exports = {
       return ctx.reply({ embeds: [errorEmbed] });
     }
 
+    // Reply INSTANTLY with the optimistic result — this is what eliminates
+    // the "is thinking..." flash entirely, since we acknowledge the
+    // interaction before waiting on Discord's (sometimes slow) bulkDelete
+    // API call. We correct the message afterward only if needed.
+    const optimisticEmbed = new EmbedBuilder()
+      .setColor(Colors.Green)
+      .setDescription(`✅ \`${amount}\` messages have been deleted.`);
+    const replyPromise = ctx.reply({ embeds: [optimisticEmbed] });
+
     try {
-      const deleted = await withTimeout(
-        ctx.channel.bulkDelete(amount, true),
-        2500,
-        'bulkDelete',
-      );
+      const deleted = await ctx.channel.bulkDelete(amount, true);
+      await replyPromise;
 
-      const successEmbed = new EmbedBuilder()
-        .setColor(Colors.Green)
-        .setDescription(`✅ \`${deleted.size}\` messages have been deleted.`);
+      if (deleted.size !== amount) {
+        // Actual count differs (e.g. some messages were older than 14 days)
+        // — silently correct the already-sent message.
+        const correctedEmbed = new EmbedBuilder()
+          .setColor(Colors.Green)
+          .setDescription(`✅ \`${deleted.size}\` messages have been deleted.`);
+        await ctx.raw.editReply({ embeds: [correctedEmbed] }).catch(() => {});
+      }
 
-      await ctx.reply({ embeds: [successEmbed] });
       setTimeout(() => ctx.raw.deleteReply().catch(() => {}), 1500);
     } catch (err) {
       console.error('Clear command error:', err.message);
+      await replyPromise.catch(() => {});
       const failEmbed = new EmbedBuilder()
         .setColor(Colors.Red)
         .setDescription(`❌ Failed to delete messages: ${err.message}`);
-      await ctx.reply({ embeds: [failEmbed] }).catch((e) =>
-        console.error('Could not even send the failure reply:', e.message),
-      );
+      await ctx.raw.editReply({ embeds: [failEmbed] }).catch(() => {});
+      setTimeout(() => ctx.raw.deleteReply().catch(() => {}), 1500);
     }
   },
 };
